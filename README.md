@@ -23,6 +23,12 @@ python main.py --input "../Vorlagen/KAN_1060020 EK Preis IFB.pdf" --output "./te
 
 **Voraussetzungen:** [Rust](https://www.rust-lang.org/learn/get-started), Node.js 20+, WebView2 (Windows).
 
+Nach der Rust-Installation **Terminal/Cursor neu starten** (damit `cargo` im PATH ist). Test: `cargo --version`. Falls nicht gefunden:
+
+```powershell
+$env:Path = "$env:USERPROFILE\.cargo\bin;" + $env:Path
+```
+
 ```bash
 # Sidecar (optional für Release; Dev nutzt Python automatisch)
 cd extractor

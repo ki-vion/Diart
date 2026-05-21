@@ -28,7 +28,7 @@ fn parse_last_json_line(stdout: &str) -> Result<serde_json::Value, String> {
     serde_json::from_str(line).map_err(|e| format!("JSON parse error: {e} — line: {line}"))
 }
 
-fn map_json(mut parsed: serde_json::Value, output: &str) -> ConvertResult {
+fn map_json(parsed: serde_json::Value, output: &str) -> ConvertResult {
     ConvertResult {
         ok: parsed.get("ok").and_then(|v| v.as_bool()).unwrap_or(false),
         layout_id: parsed
