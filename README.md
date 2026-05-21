@@ -36,7 +36,7 @@ cd extractor
 
 cd ../desktop
 npm install
-npm run tauri dev
+.\dev.ps1
 ```
 
 Release:
