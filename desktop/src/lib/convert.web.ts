@@ -21,9 +21,102 @@ export type ConvertResponse = {
   outputFileName?: string;
 };
 
+async function pickPdfFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/pdf,.pdf";
+    input.multiple = false;
+
+    const cleanup = () => {
+      input.remove();
+    };
+
+    input.addEventListener(
+      "change",
+      () => {
+        const file = input.files?.item(0) ?? null;
+        cleanup();
+        resolve(file);
+      },
+      { once: true },
+    );
+
+    input.addEventListener(
+      "cancel",
+      () => {
+        cleanup();
+        resolve(null);
+      },
+      { once: true },
+    );
+
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+function toPreviewRows(items: Array<{ position: string | null; article_number: string | null; description: string; quantity: number | null; unit: string | null; unit_price: number | null }>, aufschlag: number): PreviewRow[] {
+  return items.slice(0, 25).map((item) => {
+    const menge = item.quantity ?? null;
+    const einzelpreisPdf = item.unit_price ?? null;
+    const vk =
+      menge !== null && einzelpreisPdf !== null ? einzelpreisPdf * (1 + aufschlag) : null;
+    const gesamt = menge !== null && vk !== null ? menge * vk : null;
+
+    return {
+      Position: item.position,
+      Artikel: item.article_number ?? item.description,
+      Menge: menge,
+      Einheit: item.unit ?? null,
+      "Einzelpreis PDF (€)": einzelpreisPdf,
+      Aufschlag: aufschlag,
+      "Einzelpreis (€)": vk,
+      "Gesamt (€)": gesamt,
+    };
+  });
+}
+
 export async function pickAndConvert(
-  _aufschlagPercent: number,
+  aufschlagPercent: number,
 ): Promise<ConvertResponse | null> {
-  // Implemented in later tasks. For now return null to keep UI flow intact.
-  return null;
+  const file = await pickPdfFile();
+  if (!file) return null;
+
+  const aufschlag = aufschlagPercent / 100;
+
+  try {
+    const { extractPdfLines } = await import("../pdf/mupdf");
+    const { runExtraction } = await import("../extractor");
+    const { buildExcelBuffer } = await import("../export/excel");
+
+    const pdfText = await extractPdfLines(file);
+    const extraction = runExtraction(pdfText);
+
+    const xlsxBytes = await buildExcelBuffer(extraction, { aufschlag });
+    const xlsxBlob = new Blob([xlsxBytes], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const baseName = file.name.replace(/\.pdf$/i, "");
+    const outputFileName = `${baseName || "output"}.xlsx`;
+
+    return {
+      ok: true,
+      layout_id: extraction.layout_id,
+      message: "Konvertierung erfolgreich",
+      aufschlag,
+      preview: toPreviewRows(extraction.items, aufschlag),
+      xlsxBlob,
+      outputFileName,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      message: "Konvertierung fehlgeschlagen",
+      error: msg,
+      aufschlag,
+    };
+  }
 }

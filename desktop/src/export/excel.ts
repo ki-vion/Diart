@@ -3,7 +3,7 @@ import type { ExtractionResult } from "../extractor/models";
 
 export type BuildExcelOptions = {
   /**
-   * Percent value. Example: 20 means 20%.
+   * Factor value. Example: 0.2 means 20%.
    */
   aufschlag: number;
 };
@@ -28,7 +28,7 @@ export async function buildExcelBuffer(
 
   sheet.addRow([...HEADERS]);
 
-  const aufschlagFactor = (opts.aufschlag ?? 0) / 100;
+  const aufschlagFactor = opts.aufschlag ?? 0;
 
   for (const item of result.items) {
     const rowIndex = sheet.rowCount + 1; // next row number (1-based)

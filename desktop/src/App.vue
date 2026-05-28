@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { pickAndConvert, type ConvertResponse, type PreviewRow } from "./lib/convert";
+import { downloadBlob } from "./lib/download";
 
 const aufschlagPercent = ref(20);
 const loading = ref(false);
@@ -36,6 +37,13 @@ async function convert() {
   } finally {
     loading.value = false;
   }
+}
+
+function download() {
+  const blob = result.value?.xlsxBlob;
+  const name = result.value?.outputFileName;
+  if (!blob || !name) return;
+  downloadBlob(blob, name);
 }
 
 function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
@@ -79,6 +87,14 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
       <p>{{ result.message }}</p>
       <p v-if="result.layout_id"><strong>Layout:</strong> {{ result.layout_id }}</p>
       <p v-if="result.outputFileName"><strong>Datei:</strong> {{ result.outputFileName }}</p>
+      <button
+        v-if="result.xlsxBlob && result.outputFileName"
+        type="button"
+        class="primary"
+        @click="download"
+      >
+        Excel herunterladen
+      </button>
     </section>
 
     <section v-if="result?.preview?.length" class="card">

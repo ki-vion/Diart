@@ -29,7 +29,7 @@ describe("buildExcelBuffer", () => {
       ],
     };
 
-    const buf = await buildExcelBuffer(result, { aufschlag: 20 });
+    const buf = await buildExcelBuffer(result, { aufschlag: 0.2 });
     expect(buf.byteLength).toBeGreaterThan(1000);
   });
 });
