@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { openPath } from "@tauri-apps/plugin-opener";
 import { pickAndConvert, type ConvertResponse, type PreviewRow } from "./lib/convert";
 
 const aufschlagPercent = ref(20);
@@ -37,13 +36,6 @@ async function convert() {
   } finally {
     loading.value = false;
   }
-}
-
-async function openOutputFolder() {
-  const path = result.value?.output;
-  if (!path) return;
-  const dir = path.replace(/[/\\][^/\\]+$/, "");
-  await openPath(dir);
 }
 
 function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
@@ -86,8 +78,7 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
     <section v-if="result?.ok" class="card success">
       <p>{{ result.message }}</p>
       <p v-if="result.layout_id"><strong>Layout:</strong> {{ result.layout_id }}</p>
-      <p v-if="result.output"><strong>Datei:</strong> {{ result.output }}</p>
-      <button type="button" @click="openOutputFolder">Ordner öffnen</button>
+      <p v-if="result.outputFileName"><strong>Datei:</strong> {{ result.outputFileName }}</p>
     </section>
 
     <section v-if="result?.preview?.length" class="card">
