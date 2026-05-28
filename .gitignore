@@ -1,13 +1,3 @@
 .worktrees/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-dist/
-build/
-*.egg-info/
-extractor/tests/_out/
-desktop/src-tauri/binaries/
 desktop/node_modules/
 desktop/dist/
-desktop/src-tauri/target/

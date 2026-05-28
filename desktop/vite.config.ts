@@ -27,6 +27,17 @@ export default defineConfig({
       },
     }),
   ],
+  // MuPDF.js uses top-level await; default Vite/esbuild targets (es2020) reject it in dev.
+  esbuild: {
+    target: "esnext",
+  },
+  assetsInclude: ["**/*.wasm"],
+  optimizeDeps: {
+    exclude: ["mupdf"],
+    esbuildOptions: {
+      target: "esnext",
+    },
+  },
   build: {
     target: "esnext",
   },

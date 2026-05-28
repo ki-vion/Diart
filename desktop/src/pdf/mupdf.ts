@@ -1,5 +1,24 @@
-import mupdf from "mupdf";
+// Relative path: mupdf package.json does not export the .wasm subpath.
+import wasmUrl from "../../node_modules/mupdf/dist/mupdf-wasm.wasm?url";
 import type { PdfText } from "./types";
+
+type MupdfModule = typeof import("mupdf").default;
+
+let mupdfPromise: Promise<MupdfModule> | null = null;
+
+/** MuPDF must be loaded after setting locateFile — otherwise Vite serves HTML for the .wasm path. */
+async function getMupdf(): Promise<MupdfModule> {
+  if (!mupdfPromise) {
+    mupdfPromise = (async () => {
+      globalThis.$libmupdf_wasm_Module = {
+        locateFile: () => wasmUrl,
+      };
+      const mod = await import("mupdf");
+      return mod.default;
+    })();
+  }
+  return mupdfPromise;
+}
 
 function normalizeLines(text: string): string[] {
   return text
@@ -9,6 +28,7 @@ function normalizeLines(text: string): string[] {
 }
 
 export async function extractPdfLines(file: File): Promise<PdfText> {
+  const mupdf = await getMupdf();
   const buf = await file.arrayBuffer();
   const doc = mupdf.Document.openDocument(new Uint8Array(buf), "application/pdf");
   try {
@@ -18,8 +38,6 @@ export async function extractPdfLines(file: File): Promise<PdfText> {
     for (let i = 0; i < pageCount; i++) {
       const page = doc.loadPage(i);
       try {
-        // MuPDF exposes rich text extraction via StructuredText.
-        // `.asText()` yields plain text close to Python `get_text().splitlines()`.
         const text = page.toStructuredText().asText();
         pages.push({ index: i, lines: normalizeLines(text) });
       } finally {
@@ -32,4 +50,3 @@ export async function extractPdfLines(file: File): Promise<PdfText> {
     doc.destroy();
   }
 }
-
