@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractFromLines } from "./kan_ifb";
 
-describe("KanIfbStrategy.extractFromLines", () => {
+describe("kan_ifb extractFromLines", () => {
   it("extracts items from KAN IFB-like lines", () => {
     const lines = [
       "ANGEBOT",

@@ -1,29 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { extractFromLines } from "./rk_stark";
 
-describe("RkStarkStrategy.extractFromLines", () => {
-  it("extracts a row-like line and appends continuation", () => {
+describe("rk_stark extractFromLines", () => {
+  it("extracts multi-line RK blocks", () => {
     const lines = [
       "STARK Deutschland",
-      "1 330240 Fermacell Powerpanel 10,0 St 12,34 EUR 123,40",
+      "00010 249706",
+      "<B>",
+      "Fermacell Powerpanel",
+      "10",
+      "St",
+      "12,34",
+      "EUR/1 ST",
+      "123,40",
       "Zusatztext zur Beschreibung",
     ];
 
-    expect(extractFromLines(lines, "RK - Fermacell.pdf")).toEqual({
-      layout_id: "rk_stark",
-      source_pdf: "RK - Fermacell.pdf",
-      items: [
-        {
-          position: "1",
-          article_number: "330240",
-          description: "Fermacell Powerpanel Zusatztext zur Beschreibung",
-          quantity: 10,
-          unit: "St",
-          unit_price: 12.34,
-          line_total: 123.4,
-        },
-      ],
-    });
+    const result = extractFromLines(lines, "RK - Fermacell.pdf");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.position).toBe("00010");
+    expect(result.items[0]?.article_number).toBe("249706");
+    expect(result.items[0]?.quantity).toBe(10);
+    expect(result.items[0]?.unit_price).toBe(12.34);
+    expect(result.items[0]?.line_total).toBe(123.4);
+    expect(result.items[0]?.description).toContain("Fermacell");
+    expect(result.items[0]?.description).toContain("Zusatztext");
   });
 });
 

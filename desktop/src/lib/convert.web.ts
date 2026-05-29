@@ -1,3 +1,5 @@
+import { formatArtikelCell } from "../export/format-artikel";
+
 export type PreviewRow = {
   Position: string | null;
   Artikel: string;
@@ -12,6 +14,7 @@ export type PreviewRow = {
 export type ConvertResponse = {
   ok: boolean;
   layout_id?: string;
+  extraction_mode?: "layout" | "table";
   message?: string;
   error?: string;
   aufschlag?: number;
@@ -56,7 +59,17 @@ async function pickPdfFile(): Promise<File | null> {
   });
 }
 
-function toPreviewRows(items: Array<{ position: string | null; article_number: string | null; description: string; quantity: number | null; unit: string | null; unit_price: number | null }>, aufschlag: number): PreviewRow[] {
+function toPreviewRows(
+  items: Array<{
+    position: string | null;
+    article_number: string | null;
+    description: string;
+    quantity: number | null;
+    unit: string | null;
+    unit_price: number | null;
+  }>,
+  aufschlag: number,
+): PreviewRow[] {
   return items.slice(0, 25).map((item) => {
     const menge = item.quantity ?? null;
     const einzelpreisPdf = item.unit_price ?? null;
@@ -66,7 +79,7 @@ function toPreviewRows(items: Array<{ position: string | null; article_number: s
 
     return {
       Position: item.position,
-      Artikel: item.article_number ?? item.description,
+      Artikel: formatArtikelCell(item),
       Menge: menge,
       Einheit: item.unit ?? null,
       "Einzelpreis PDF (€)": einzelpreisPdf,
@@ -86,12 +99,15 @@ export async function pickAndConvert(
   const aufschlag = aufschlagPercent / 100;
 
   try {
-    const { extractPdfLines } = await import("../pdf/mupdf");
+    const { extractPdfStructured } = await import("../pdf/structured");
     const { runExtraction } = await import("../extractor");
     const { buildExcelBuffer } = await import("../export/excel");
 
-    const pdfText = await extractPdfLines(file);
-    const extraction = runExtraction(pdfText);
+    const structured = await extractPdfStructured(file);
+    const { detectProfile } = await import("../extractor");
+    const extraction = runExtraction(structured);
+    const profile = detectProfile(structured);
+    const extraction_mode = profile === "generic" ? "table" : "layout";
 
     const xlsxBytes = await buildExcelBuffer(extraction, { aufschlag });
     const xlsxBlob = new Blob([xlsxBytes], {
@@ -104,6 +120,7 @@ export async function pickAndConvert(
     return {
       ok: true,
       layout_id: extraction.layout_id,
+      extraction_mode,
       message: "Konvertierung erfolgreich",
       aufschlag,
       preview: toPreviewRows(extraction.items, aufschlag),

@@ -1,24 +1,5 @@
-// Relative path: mupdf package.json does not export the .wasm subpath.
-import wasmUrl from "../../node_modules/mupdf/dist/mupdf-wasm.wasm?url";
+import { getMupdf } from "./mupdf-loader";
 import type { PdfText } from "./types";
-
-type MupdfModule = typeof import("mupdf").default;
-
-let mupdfPromise: Promise<MupdfModule> | null = null;
-
-/** MuPDF must be loaded after setting locateFile — otherwise Vite serves HTML for the .wasm path. */
-async function getMupdf(): Promise<MupdfModule> {
-  if (!mupdfPromise) {
-    mupdfPromise = (async () => {
-      globalThis.$libmupdf_wasm_Module = {
-        locateFile: () => wasmUrl,
-      };
-      const mod = await import("mupdf");
-      return mod.default;
-    })();
-  }
-  return mupdfPromise;
-}
 
 function normalizeLines(text: string): string[] {
   return text

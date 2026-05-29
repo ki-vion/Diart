@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { extractFromLines } from "./laier_van";
 
-describe("LaierVanStrategy.extractFromLines", () => {
+describe("laier_van extractFromLines", () => {
   it("extracts sequential positions for article rows", () => {
     const lines = [
       "VK-Preis",

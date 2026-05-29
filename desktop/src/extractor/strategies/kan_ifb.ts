@@ -1,6 +1,5 @@
 import type { ExtractionResult, LineItem } from "../models";
 import { parseDeNumber } from "../utils";
-import type { Strategy } from "./base";
 
 const POS_HEAD = /^(?<pos>\d{3})\s+Artikelnummer:\s+(?<art>\S+)/;
 
@@ -53,17 +52,4 @@ export function extractFromLines(lines: string[], source_pdf: string): Extractio
 
   return { layout_id: "kan_ifb", source_pdf, items };
 }
-
-export const KanIfbStrategy: Strategy = {
-  layout_id: "kan_ifb",
-  matchesPage0Text: (page0Text: string) =>
-    page0Text.includes("ANGEBOT") && page0Text.includes("Beleg") && page0Text.includes("KAN"),
-  extract: (pdf: { pages: { lines: string[] }[] }, source_pdf: string) => {
-    const lines: string[] = [];
-    for (const page of pdf.pages) {
-      for (const line of page.lines) lines.push(line.trim());
-    }
-    return extractFromLines(lines, source_pdf);
-  },
-};
 

@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import type { ExtractionResult } from "../extractor/models";
+import { formatArtikelCell } from "./format-artikel";
 
 export type BuildExcelOptions = {
   /**
@@ -42,7 +43,7 @@ export async function buildExcelBuffer(
 
     sheet.addRow([
       item.position ?? "",
-      item.article_number ?? item.description,
+      formatArtikelCell(item),
       menge,
       item.unit ?? "",
       einzelpreisPdf,

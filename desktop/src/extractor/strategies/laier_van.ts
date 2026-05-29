@@ -1,6 +1,5 @@
 import type { ExtractionResult, LineItem } from "../models";
 import { parseDeNumber } from "../utils";
-import type { Strategy } from "./base";
 
 const ARTNR = /^\d{8}$/;
 const QTY_UNIT = /^(?<qty>[\d.,]+)\s+(?<unit>.+)$/;
@@ -65,15 +64,4 @@ export function extractFromLines(lines: string[], source_pdf: string): Extractio
 
   return { layout_id: "laier_van", source_pdf, items };
 }
-
-export const LaierVanStrategy: Strategy = {
-  layout_id: "laier_van",
-  matchesPage0Text: (page0Text: string) =>
-    page0Text.includes("VK-Preis") && (page0Text.includes("Rudolf Laier") || page0Text.includes("VAN0")),
-  extract: (pdf: { pages: { lines: string[] }[] }, source_pdf: string) => {
-    const lines: string[] = [];
-    for (const page of pdf.pages) for (const line of page.lines) lines.push(line.trim());
-    return extractFromLines(lines, source_pdf);
-  },
-};
 
