@@ -9,9 +9,12 @@ import type { PdfLine, PdfStructured } from "../../pdf/types";
 import type { ColumnRole } from "../table/header-map";
 import { calibrateColumnWindows, lineToCells, trimCells } from "./columns";
 import type { RowCells, TableTemplate } from "./types";
+import { isNonItemLine } from "../table/table-zone";
+import { findTableRegionOrContinuation } from "../table/table-region";
 
 function isFooter(text: string): boolean {
-  return /^(summe|gesamt|übertrag|seite\s+\d|nettowert|ust|endsumme)/i.test(text.trim());
+  const t = text.trim();
+  return /^(summe|gesamt|übertrag|seite\s+\d|nettowert|ust|endsumme)/i.test(t);
 }
 
 function isAnchorLine(
@@ -138,11 +141,17 @@ export function extractWithTemplate(
   let current: LineItem | null = null;
 
   for (const page of structured.pages) {
+    const region = findTableRegionOrContinuation(page);
     const pageLines = page.lines;
+    const dataStart = region?.dataStartIndex ?? 0;
+    const dataEnd = region?.dataEndIndex ?? pageLines.length;
+
     for (let li = 0; li < pageLines.length; li++) {
       const line = pageLines[li]!;
       const text = line.text.trim();
       if (!text || isFooter(text)) continue;
+      if (li < dataStart || li >= dataEnd) continue;
+      if (isNonItemLine(line, page.height)) continue;
       if (template.skipLine?.test(text)) continue;
       if (template.minY !== undefined && line.y < template.minY) continue;
 

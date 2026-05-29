@@ -6,12 +6,9 @@ import {
   type WordToken,
 } from "./cluster-columns";
 import { HEADER_HINTS, type ColumnRole, type TableColumnMap } from "./header-map";
-import {
-  extractBlocksFromPage,
-  findBlockAnchors,
-  findTableRegion,
-  scoreHeaderLine,
-} from "./item-blocks";
+import { extractBlocksFromPage, findBlockAnchors, scoreHeaderLine } from "./item-blocks";
+import { findTableRegion, findTableRegionOrContinuation } from "./table-region";
+import { isNonItemLine } from "./table-zone";
 import type { PdfLine, PdfPageStructured, PdfStructured } from "../../pdf/types";
 
 export type { TableColumnMap } from "./header-map";
@@ -152,14 +149,19 @@ function isDescriptionOnlyRow(cells: string[], map: TableColumnMap): boolean {
 /** One-line-per-row tables (all columns on the same baseline). */
 function extractSingleLineRows(
   page: PdfPageStructured,
-  table: { headerIndex: number; boundaries: number[]; columnMap: TableColumnMap },
+  table: {
+    headerIndex: number;
+    dataEndIndex: number;
+    boundaries: number[];
+    columnMap: TableColumnMap;
+  },
 ): LineItem[] {
-  const { headerIndex, boundaries, columnMap } = table;
+  const { headerIndex, dataEndIndex, boundaries, columnMap } = table;
   const items: LineItem[] = [];
 
-  for (let i = headerIndex + 1; i < page.lines.length; i++) {
+  for (let i = headerIndex + 1; i < dataEndIndex; i++) {
     const line = page.lines[i]!;
-    if (isFooterLine(line.text)) continue;
+    if (isFooterLine(line.text) || isNonItemLine(line, page.height)) continue;
 
     const cells = clusterLineIntoCells(lineToTokens(line), boundaries);
     if (cells.every((c) => !c.trim())) continue;
@@ -179,9 +181,11 @@ function extractSingleLineRows(
 }
 
 function extractFromPage(page: PdfPageStructured): LineItem[] {
-  const region = findTableRegion(page);
+  const region = findTableRegionOrContinuation(page);
   if (region) {
-    const anchors = findBlockAnchors(page.lines, region.dataStartIndex);
+    const anchors = findBlockAnchors(page.lines, region.dataStartIndex).filter(
+      (a) => a.lineIndex < region.dataEndIndex,
+    );
     if (anchors.length >= 1) {
       const blockItems = extractBlocksFromPage(page, region);
       if (blockItems.length > 0) return blockItems;
@@ -189,7 +193,11 @@ function extractFromPage(page: PdfPageStructured): LineItem[] {
   }
 
   const singleLine = findSingleLineTable(page);
-  if (singleLine) return extractSingleLineRows(page, singleLine);
+  if (singleLine) {
+    const fullRegion = findTableRegion(page);
+    const dataEndIndex = fullRegion?.dataEndIndex ?? page.lines.length;
+    return extractSingleLineRows(page, { ...singleLine, dataEndIndex });
+  }
 
   return [];
 }

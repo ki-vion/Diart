@@ -1,6 +1,8 @@
 import type { LineItem } from "../models";
 import { parseDeNumber } from "../utils";
+import { parseRkBlock } from "../profiles/extract-rk-legacy";
 import type { PdfLine } from "../../pdf/types";
+import { isNonItemLine } from "./table-zone";
 import {
   clusterLineIntoCells,
   inferColumnBoundaries,
@@ -8,7 +10,8 @@ import {
 } from "./cluster-columns";
 import { HEADER_HINTS, type ColumnRole, type TableColumnMap } from "./header-map";
 
-const RK_HEAD = /^(?<pos>\d{5})\s+(?<art>\d{6,})\b/;
+const RK_HEAD = /^(?<pos>\d{5})\s*(?<art>\d{6,})\b/;
+const RK_HEAD_LINE = /^\d{5}\s*\d{6,}\b/;
 const KAN_HEAD = /^(?<pos>\d{3})\s+Artikelnummer:\s+(?<art>\S+)/i;
 const NORIT_POS = /^\d{3}$/;
 const NORIT_NET = /^(?<net>[\d.,]+)\s+EUR\s*$/i;
@@ -35,12 +38,14 @@ export type BlockAnchor = {
 };
 
 export function scoreHeaderLine(text: string): number {
-  const norm = text.toLowerCase().replace(/\./g, "").replace(/\s+/g, "");
+  const norm = text.toLowerCase().replace(/\./g, " ").replace(/\s+/g, " ").trim();
   let score = 0;
   for (const hints of Object.values(HEADER_HINTS)) {
     for (const h of hints) {
-      const token = h.replace(/\./g, "");
-      if (norm.includes(token)) score += 1;
+      const token = h.replace(/\./g, "").trim();
+      if (!token) continue;
+      const re = new RegExp(`(?:^|\\s)${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`, "i");
+      if (re.test(norm)) score += 1;
     }
   }
   return score;
@@ -80,7 +85,7 @@ export function findBlockAnchors(lines: PdfLine[], fromIndex: number): BlockAnch
     const t = lines[i]!.text.trim();
     if (!t || SKIP_LINE.test(t)) continue;
 
-    if (RK_HEAD.test(t)) {
+    if (RK_HEAD.test(t) || RK_HEAD_LINE.test(t)) {
       anchors.push({ lineIndex: i, kind: "rk" });
       continue;
     }
@@ -217,10 +222,14 @@ export function parseItemBlock(
   let startIdx = 0;
 
   const rk = RK_HEAD.exec(texts[0] ?? "");
-  if (rk?.groups) {
-    position = rk.groups.pos ?? null;
-    article_number = rk.groups.art ?? null;
-    startIdx = 1;
+  if (rk?.groups || RK_HEAD_LINE.test(texts[0] ?? "")) {
+    const fromRk = parseRkBlock(texts);
+    if (fromRk) return fromRk;
+    if (rk?.groups) {
+      position = rk.groups.pos ?? null;
+      article_number = rk.groups.art ?? null;
+      startIdx = 1;
+    }
   }
 
   const kan = KAN_HEAD.exec(texts[0] ?? "");
@@ -250,6 +259,7 @@ export function parseItemBlock(
   for (let i = startIdx; i < texts.length; i++) {
     const t = texts[i]!;
     if (shouldSkipBlockLine(t)) continue;
+    if (isNonItemLine(lines[i]!, 842)) break;
 
     if (NORIT_NET.test(t)) {
       const m = NORIT_NET.exec(t);
@@ -385,86 +395,28 @@ function readFieldsFromCells(
   return out;
 }
 
-export function findTableRegion(page: { lines: PdfLine[] }): {
-  dataStartIndex: number;
-  boundaries: number[];
-  columnMap: TableColumnMap;
-} | null {
-  let headerStart = -1;
-  let headerEnd = -1;
-  let bestScore = 0;
-
-  for (let i = 0; i < page.lines.length; i++) {
-    const score = scoreHeaderLine(page.lines[i]!.text);
-    if (score > 0) {
-      if (headerStart < 0) headerStart = i;
-      headerEnd = i;
-      bestScore = Math.max(bestScore, score);
-    }
-  }
-
-  if (headerStart < 0 || bestScore < 2) return null;
-
-  while (headerEnd + 1 < page.lines.length) {
-    const next = page.lines[headerEnd + 1]!.text.trim();
-    if (!next) {
-      headerEnd += 1;
-      continue;
-    }
-    if (findBlockAnchors(page.lines, headerEnd + 1).some((a) => a.lineIndex === headerEnd + 1)) {
-      break;
-    }
-    if (scoreHeaderLine(next) > 0 || /^(in\s+eur|me|pe)$/i.test(next)) {
-      headerEnd += 1;
-      continue;
-    }
-    break;
-  }
-
-  const headerTokens: WordToken[] = [];
-  for (let i = headerStart; i <= headerEnd; i++) {
-    for (const w of page.lines[i]!.words) {
-      headerTokens.push({ text: w.text, x: w.x });
-    }
-  }
-
-  const boundaries = inferColumnBoundaries(headerTokens);
-  const headerCells = clusterLineIntoCells(headerTokens, boundaries);
-  const columnMap = mapColumnsFromCells(headerCells);
-
-  return {
-    dataStartIndex: headerEnd + 1,
-    boundaries,
-    columnMap,
-  };
-}
-
-function mapColumnsFromCells(cells: string[]): TableColumnMap {
-  const map: TableColumnMap = {};
-  cells.forEach((cell, idx) => {
-    const norm = cell.toLowerCase().replace(/\./g, "").replace(/\s+/g, "");
-    if (!norm) return;
-    for (const role of Object.keys(HEADER_HINTS) as ColumnRole[]) {
-      const hints = HEADER_HINTS[role];
-      if (hints.some((h) => norm.includes(h.replace(/\./g, "")))) {
-        if (map[role] === undefined) map[role] = idx;
-      }
-    }
-  });
-  return map;
-}
+export { findTableRegion, findTableRegionOrContinuation, type TableRegion } from "./table-region";
 
 export function extractBlocksFromPage(
   page: { lines: PdfLine[] },
-  region: { dataStartIndex: number; boundaries: number[]; columnMap: TableColumnMap },
+  region: {
+    dataStartIndex: number;
+    dataEndIndex: number;
+    boundaries: number[];
+    columnMap: TableColumnMap;
+  },
 ): LineItem[] {
-  const anchors = findBlockAnchors(page.lines, region.dataStartIndex);
+  const endLimit = region.dataEndIndex ?? page.lines.length;
+  const anchors = findBlockAnchors(page.lines, region.dataStartIndex).filter(
+    (a) => a.lineIndex < endLimit,
+  );
   if (anchors.length === 0) return [];
 
   const items: LineItem[] = [];
   for (let a = 0; a < anchors.length; a++) {
     const start = anchors[a]!.lineIndex;
-    const end = a + 1 < anchors.length ? anchors[a + 1]!.lineIndex : page.lines.length;
+    const nextStart = a + 1 < anchors.length ? anchors[a + 1]!.lineIndex : endLimit;
+    const end = Math.min(nextStart, endLimit);
     const blockLines = page.lines.slice(start, end);
     const item = parseItemBlock(blockLines, region.boundaries, region.columnMap);
     if (item) items.push(item);

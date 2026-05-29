@@ -1,62 +1,35 @@
-import type { ExtractionResult, LineItem } from "../models";
-import { parseDeNumber } from "../utils";
-import { parseRkBlock } from "../profiles/extract-rk-legacy";
+import type { ExtractionResult } from "../models";
+import type { PdfStructured } from "../../pdf/types";
+import { extractAnchoredItems } from "../table/anchor-extract";
 
-const ROW_HEAD =
-  /^(?<pos>\d+)\s+(?<art>\d+)\s+(?<rest>.+)$/;
-
-const ROW_TAIL =
-  /^(?<desc>.*)\s+(?<qty>[\d.,]+)\s+(?<unit>\S+)\s+(?<price>[\d.,]+)(?:\s*(?:EUR\/1|EUR))?\s+(?<total>[\d.,]+)\s*$/i;
-
-/** Legacy single-line RK row (tests / rare flat exports). */
-function parseRowLine(line: string): LineItem | null {
-  const head = ROW_HEAD.exec(line);
-  if (!head?.groups) return null;
-
-  const rest = head.groups.rest ?? "";
-  const tail = ROW_TAIL.exec(rest);
-  if (!tail?.groups) return null;
-
+/** RK/STARK extraction via shared anchor-block pipeline. */
+export function extractFromStructured(
+  structured: PdfStructured,
+  source_pdf: string,
+): ExtractionResult {
   return {
-    position: head.groups.pos ?? null,
-    article_number: head.groups.art ?? null,
-    description: (tail.groups.desc ?? "").trim(),
-    quantity: parseDeNumber(tail.groups.qty ?? ""),
-    unit: (tail.groups.unit ?? "").trim() || null,
-    unit_price: parseDeNumber(tail.groups.price ?? ""),
-    line_total: parseDeNumber(tail.groups.total ?? ""),
+    layout_id: "rk_stark",
+    source_pdf,
+    items: extractAnchoredItems(structured, "rk_stark"),
   };
 }
 
+/** @deprecated Prefer extractFromStructured — flat lines without geometry. */
 export function extractFromLines(lines: string[], source_pdf: string): ExtractionResult {
-  const items: LineItem[] = [];
-  let block: string[] = [];
-
-  const flush = () => {
-    if (block.length === 0) return;
-    const fromBlock = parseRkBlock(block);
-    if (fromBlock) items.push(fromBlock);
-    else {
-      const single = parseRowLine(block[0] ?? "");
-      if (single) items.push(single);
-    }
-    block = [];
+  const structured: PdfStructured = {
+    pages: [
+      {
+        index: 0,
+        width: 595,
+        height: 842,
+        rawText: lines.join("\n"),
+        lines: lines.map((text, i) => ({
+          y: i * 12,
+          text,
+          words: [{ text, x: 42, y: i * 12, fontSize: 10 }],
+        })),
+      },
+    ],
   };
-
-  for (const raw of lines) {
-    const line = (raw ?? "").trim();
-    if (!line) continue;
-
-    if (/^\d{5}\s+\d{6,}\b/.test(line)) {
-      flush();
-      block = [line];
-      continue;
-    }
-
-    if (block.length > 0) block.push(line);
-  }
-  flush();
-
-  return { layout_id: "rk_stark", source_pdf, items };
+  return extractFromStructured(structured, source_pdf);
 }
-
