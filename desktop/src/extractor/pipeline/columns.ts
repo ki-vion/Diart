@@ -87,7 +87,7 @@ function mergeLaierColumnWindows(
 }
 
 export function calibrateColumnWindows(
-  pages: PdfPageStructured[],
+  pages: Pick<PdfPageStructured, "lines">[],
   headerHints: Partial<Record<ColumnRole, string[]>>,
   fallback: ColumnWindow[],
   layoutId?: string,

@@ -1,9 +1,5 @@
 import type { PdfLine } from "../../pdf/types";
-import {
-  isNonItemLine as isNonItemLineBase,
-  isPageImprintLine,
-  isPostTableText,
-} from "../table/table-zone";
+import { isNonItemLine as isNonItemLineBase, isPostTableText } from "../table/table-zone";
 
 export { isPostTableText, isPageImprintLine } from "../table/table-zone";
 

@@ -48,7 +48,10 @@ describe("buildExcelBuffer", () => {
     await wb.xlsx.load(Buffer.from(await buildExcelBuffer(result, { aufschlag: 0.2 })));
     const sheet = wb.worksheets[0]!;
 
-    expect(sheet.getRow(1).values?.slice(1)).toEqual([...MATERIALLISTE_HEADERS]);
+    const headerRowValues = sheet.getRow(1).values;
+    expect(
+      Array.isArray(headerRowValues) ? headerRowValues.slice(1) : [],
+    ).toEqual([...MATERIALLISTE_HEADERS]);
 
     const row2 = sheet.getRow(2);
     expect(row2.getCell(1).value).toBe("1");

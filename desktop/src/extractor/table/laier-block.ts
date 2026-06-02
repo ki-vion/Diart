@@ -116,8 +116,6 @@ export function isLaierItemAnchor(lines: PdfLine[], index: number): boolean {
   return false;
 }
 
-const HAS_LETTERS = /[A-Za-zÄÖÜäöüß]/;
-
 function mergeLaierBillingFields(
   item: LineItem,
   cells: ReturnType<typeof trimCells>,

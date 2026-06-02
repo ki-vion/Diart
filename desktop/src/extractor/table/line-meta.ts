@@ -1,4 +1,4 @@
-import type { PdfLine, PdfPage } from "../../pdf/types";
+import type { PdfLine, PdfPageStructured } from "../../pdf/types";
 import {
   findBlockAnchors,
   type BlockAnchor,
@@ -13,7 +13,9 @@ export type PageTableMeta = {
   anchorByLineIndex: Map<number, BlockAnchorKind>;
 };
 
-export function getPageTableMeta(page: Pick<PdfPage, "lines" | "height">): PageTableMeta {
+export function getPageTableMeta(
+  page: Pick<PdfPageStructured, "lines" | "height">,
+): PageTableMeta {
   const region = findTableRegionOrContinuation(page);
   if (!region) {
     return { region: null, anchors: [], anchorByLineIndex: new Map() };
@@ -36,7 +38,7 @@ export function lineInTableDataRegion(
 
 /** Same anchor decision as `extractAnchoredItems` / `extractBlocksFromPage`. */
 export function isProductionBlockAnchor(
-  page: Pick<PdfPage, "lines" | "height">,
+  page: Pick<PdfPageStructured, "lines" | "height">,
   lineIndex: number,
   meta?: PageTableMeta,
 ): boolean {
@@ -66,7 +68,7 @@ export type ExploreLineFlags = {
 };
 
 export function exploreLineFlags(
-  page: Pick<PdfPage, "lines" | "height">,
+  page: Pick<PdfPageStructured, "lines" | "height">,
   lineIndex: number,
   meta?: PageTableMeta,
 ): ExploreLineFlags {

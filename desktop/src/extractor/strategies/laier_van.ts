@@ -1,10 +1,5 @@
 import type { ExtractionResult, LineItem } from "../models";
-import {
-  extractLaierArticleId,
-  isLaierItemAnchor,
-  isLaierSkipLine,
-  parseLaierBlock,
-} from "../table/laier-block";
+import { isLaierItemAnchor, isLaierSkipLine, parseLaierBlock } from "../table/laier-block";
 import type { PdfLine } from "../../pdf/types";
 
 const SKIP_PREFIXES = [

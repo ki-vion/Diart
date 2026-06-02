@@ -91,8 +91,8 @@ export function lineFitsTableGrid(
 export function findTableEndIndex(
   page: { lines: PdfLine[]; height?: number },
   dataStartIndex: number,
-  boundaries: number[],
-  columnMap: TableColumnMap,
+  _boundaries: number[],
+  _columnMap: TableColumnMap,
 ): number {
   const lines = page.lines;
   const pageHeight = page.height ?? 842;

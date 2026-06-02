@@ -1,4 +1,4 @@
-import type { ExtractionResult } from "../models";
+import type { ExtractionResult, LineItem } from "../models";
 import type { PdfStructured } from "../../pdf/types";
 import { extractNoritStructured } from "../table/norit-structured";
 import { findNoritAnchors, parseNoritBlock } from "../table/norit-block";
@@ -24,7 +24,7 @@ export function extractNoritFromLines(lines: string[], source_pdf: string): Extr
       const lineBefore = lines[start - 1];
       return parseNoritBlock(block, lineBefore);
     })
-    .filter((it) => Boolean(it));
+    .filter((it): it is LineItem => it !== null);
 
   return {
     layout_id: "Norit",
