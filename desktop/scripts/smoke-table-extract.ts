@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadMupdf } from "./lib/mupdf-node.js";
-import { groupWordsIntoLines, mergeCharsIntoWords } from "../src/pdf/table-words.js";
+import { linesFromStructuredText } from "../src/pdf/structured-lines.js";
 import { runExtraction } from "../src/extractor/orchestrator.js";
 import type { PdfStructured } from "../src/pdf/types.js";
 
@@ -25,21 +25,13 @@ function buildStructured(
       const page = doc.loadPage(i);
       try {
         const bounds = page.getBounds();
-        const stext = page.toStructuredText();
+        const stext = page.toStructuredText("preserve-spans");
         const rawText = stext.asText();
-        const chars: { text: string; x: number; y: number; fontSize: number }[] = [];
-        stext.walk({
-          onChar(c, origin, _font, size) {
-            if (!c.trim()) return;
-            chars.push({ text: c, x: origin[0], y: origin[1], fontSize: size });
-          },
-        });
-        const words = mergeCharsIntoWords(chars);
         pages.push({
           index: i,
           width: bounds[2] - bounds[0],
           height: bounds[3] - bounds[1],
-          lines: groupWordsIntoLines(words),
+          lines: linesFromStructuredText(stext),
           rawText,
         });
         stext.destroy();

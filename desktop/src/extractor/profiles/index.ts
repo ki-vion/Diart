@@ -1,6 +1,8 @@
 import type { ExtractionResult } from "../models";
 import type { PdfStructured } from "../../pdf/types";
 import { extractAnchoredItems } from "../table/anchor-extract";
+import { columnContextFromTemplate } from "../table/column-block";
+import { LAIER_VAN_TEMPLATE } from "../pipeline/templates";
 import { extractFromLines as extractKanFromLines } from "../strategies/kan_ifb";
 import { extractFromLines as extractLaierFromLines } from "../strategies/laier_van";
 import { extractTableItems } from "../table/extract-table";
@@ -8,6 +10,7 @@ import { allAsTextLines } from "./lines";
 import { detectProfile } from "./detect-profile";
 import { extractNorit } from "./extract-norit";
 import { extractRkStark } from "./extract-rk";
+import { assignSequentialPositions } from "../assign-positions";
 import type { PdfProfile } from "./types";
 
 export { detectProfile, type PdfProfile };
@@ -18,23 +21,35 @@ export function extractByProfile(
   source_pdf: string,
 ): ExtractionResult {
   switch (profile) {
-    case "kan_ifb": {
-      const items = extractAnchoredItems(structured, "kan_ifb");
+    case "IFB GmbH": {
+      const items = extractAnchoredItems(structured, "IFB GmbH");
       if (items.length > 0) {
-        return { layout_id: "kan_ifb", source_pdf, items };
+        return { layout_id: "IFB GmbH", source_pdf, items };
       }
       return extractKanFromLines(allAsTextLines(structured), source_pdf);
     }
-    case "norit_rechnung":
+    case "Norit":
       return extractNorit(structured, source_pdf);
-    case "rk_stark":
+    case "RAAB Karcher":
       return extractRkStark(structured, source_pdf);
-    case "laier_van": {
-      const items = extractAnchoredItems(structured, "laier_van");
+    case "Rudolf Laier GmbH": {
+      const columnBlock = columnContextFromTemplate(LAIER_VAN_TEMPLATE, structured.pages);
+      const items = extractAnchoredItems(structured, {
+        layout_id: "Rudolf Laier GmbH",
+        columnBlock,
+      });
       if (items.length > 0) {
-        return { layout_id: "laier_van", source_pdf, items };
+        return {
+          layout_id: "Rudolf Laier GmbH",
+          source_pdf,
+          items: assignSequentialPositions(items),
+        };
       }
-      return extractLaierFromLines(allAsTextLines(structured), source_pdf);
+      const fallback = extractLaierFromLines(allAsTextLines(structured), source_pdf);
+      return {
+        ...fallback,
+        items: assignSequentialPositions(fallback.items),
+      };
     }
     case "generic":
       return extractTableItems(structured, source_pdf);

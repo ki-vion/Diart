@@ -8,9 +8,9 @@ export function extractFromStructured(
   source_pdf: string,
 ): ExtractionResult {
   return {
-    layout_id: "rk_stark",
+    layout_id: "RAAB Karcher",
     source_pdf,
-    items: extractAnchoredItems(structured, "rk_stark"),
+    items: extractAnchoredItems(structured, "RAAB Karcher"),
   };
 }
 

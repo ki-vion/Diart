@@ -123,6 +123,7 @@ function rowToLineItem(cells: string[], map: TableColumnMap): LineItem | null {
   return {
     position: position ?? null,
     article_number,
+    artikel_prefix: null,
     description: description || articleCell || posCell,
     quantity,
     unit: unit && unit.length <= 12 ? unit : null,

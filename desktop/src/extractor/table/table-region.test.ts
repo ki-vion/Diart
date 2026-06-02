@@ -3,6 +3,7 @@ import type { PdfLine } from "../../pdf/types";
 import {
   findTableEndIndex,
   findTableRegion,
+  findTableRegionOrContinuation,
   isValidTableHeader,
   lineFitsTableGrid,
 } from "./table-region";
@@ -33,6 +34,17 @@ describe("isValidTableHeader", () => {
 });
 
 describe("findTableEndIndex", () => {
+  it("skips letterhead lines before the first position anchor", () => {
+    const lines: PdfLine[] = [
+      line(100, [{ text: "Gedruckt am", x: 280, fontSize: 8 }]),
+      line(110, [{ text: "Seite 3 / 4", x: 490, fontSize: 8 }]),
+      line(200, [{ text: "00010", x: 42 }, { text: "9802917", x: 76 }]),
+      line(220, [{ text: "Produkt", x: 76 }]),
+    ];
+    const end = findTableEndIndex({ lines, height: 842 }, 0, [], {});
+    expect(end).toBe(lines.length);
+  });
+
   it("stops before post-table summary lines", () => {
     const lines: PdfLine[] = [
       line(200, [{ text: "00040", x: 42 }, { text: "1040847", x: 100 }]),
@@ -48,7 +60,51 @@ describe("findTableEndIndex", () => {
   });
 });
 
+describe("findTableRegionOrContinuation", () => {
+  it("finds continuation page region past repeating letterhead", () => {
+    const lines: PdfLine[] = [
+      line(100, [{ text: "Gedruckt am 21.05.2026", x: 280, fontSize: 8 }]),
+      line(100, [{ text: "Seite 3 / 4", x: 490, fontSize: 8 }]),
+      line(120, [{ text: "ANGEBOT", x: 280, fontSize: 10 }]),
+      line(200, [
+        { text: "POS.", x: 42 },
+        { text: "ARTIKEL-NR.", x: 76 },
+        { text: "MENGE", x: 274 },
+      ]),
+      line(220, [{ text: "00010", x: 42 }, { text: "9802917", x: 76 }]),
+      line(240, [{ text: "Schraube", x: 76 }]),
+    ];
+    const region = findTableRegionOrContinuation({ lines, height: 842 });
+    expect(region).not.toBeNull();
+    expect(region!.dataStartIndex).toBe(4);
+    expect(region!.dataEndIndex).toBeGreaterThan(4);
+  });
+});
+
 describe("findTableRegion", () => {
+  it("detects Laier-style header split across lines at the same Y", () => {
+    const y = 262;
+    const lines: PdfLine[] = [
+      line(y, [{ text: "Artikel", x: 42 }]),
+      line(y, [{ text: "Menge", x: 321 }]),
+      line(y, [{ text: "Einheit", x: 353 }]),
+      line(y, [{ text: "VK-Preis", x: 409 }]),
+      line(y, [{ text: "Betrag", x: 532 }]),
+      line(286, [{ text: "55510010 (Alternativposition)", x: 42 }]),
+      line(298, [
+        { text: "Sockelschienen", x: 42 },
+        { text: "2,500", x: 327 },
+        { text: "m", x: 353 },
+        { text: "428,40", x: 416 },
+        { text: "(10,28)", x: 532 },
+      ]),
+    ];
+    const region = findTableRegion({ lines, height: 842 });
+    expect(region).not.toBeNull();
+    expect(region?.columnMap.article).toBeDefined();
+    expect(region?.dataStartIndex).toBeGreaterThan(4);
+  });
+
   it("detects header without Betrag column", () => {
     const lines: PdfLine[] = [
       line(100, [

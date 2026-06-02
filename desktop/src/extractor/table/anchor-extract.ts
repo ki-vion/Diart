@@ -3,11 +3,19 @@ import type { PdfStructured } from "../../pdf/types";
 import {
   extractBlocksFromPage,
   findBlockAnchors,
+  type ItemBlockParseContext,
 } from "./item-blocks";
+import type { ColumnBlockContext } from "./column-block";
 import {
   findTableRegionOrContinuation,
   type TableRegion,
 } from "./table-region";
+
+export type AnchorExtractOptions = {
+  layout_id: string;
+  /** Calibrated X-column windows (RK, future layouts). */
+  columnBlock?: ColumnBlockContext;
+};
 
 function dedupeLineItems(items: LineItem[]): LineItem[] {
   const seen = new Set<string>();
@@ -32,19 +40,25 @@ function dedupeLineItems(items: LineItem[]): LineItem[] {
  */
 export function extractAnchoredItems(
   structured: PdfStructured,
-  layout_id: string,
+  options: AnchorExtractOptions | string,
 ): LineItem[] {
+  const opts: AnchorExtractOptions =
+    typeof options === "string" ? { layout_id: options } : options;
+  const parseCtx: ItemBlockParseContext | undefined = opts.columnBlock
+    ? { columnBlock: opts.columnBlock }
+    : undefined;
+
   const items: LineItem[] = [];
 
   for (const page of structured.pages) {
     const region = findTableRegionOrContinuation(page);
     if (!region) continue;
 
-    const pageItems = extractBlocksFromPage(page, region);
+    const pageItems = extractBlocksFromPage(page, region, parseCtx);
     items.push(...pageItems);
   }
 
-  void layout_id;
+  void opts.layout_id;
   return dedupeLineItems(items);
 }
 

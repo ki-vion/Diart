@@ -1,4 +1,4 @@
-import { formatArtikelCell } from "../export/format-artikel";
+import { formatArtikelCell, formatEinheitCell } from "../export/format-artikel";
 
 export type PreviewRow = {
   Position: string | null;
@@ -24,78 +24,51 @@ export type ConvertResponse = {
   outputFileName?: string;
 };
 
-async function pickPdfFile(): Promise<File | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "application/pdf,.pdf";
-    input.multiple = false;
-
-    const cleanup = () => {
-      input.remove();
-    };
-
-    input.addEventListener(
-      "change",
-      () => {
-        const file = input.files?.item(0) ?? null;
-        cleanup();
-        resolve(file);
-      },
-      { once: true },
-    );
-
-    input.addEventListener(
-      "cancel",
-      () => {
-        cleanup();
-        resolve(null);
-      },
-      { once: true },
-    );
-
-    document.body.appendChild(input);
-    input.click();
-  });
+/** Copy view bytes into a standalone ArrayBuffer (BlobPart-safe for strict DOM typings). */
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 function toPreviewRows(
   items: Array<{
     position: string | null;
     article_number: string | null;
+    artikel_prefix: string | null;
     description: string;
     quantity: number | null;
     unit: string | null;
     unit_price: number | null;
+    price_per?: number | null;
   }>,
   aufschlag: number,
+  layoutId?: string,
 ): PreviewRow[] {
   return items.slice(0, 25).map((item) => {
     const menge = item.quantity ?? null;
     const einzelpreisPdf = item.unit_price ?? null;
     const vk =
       menge !== null && einzelpreisPdf !== null ? einzelpreisPdf * (1 + aufschlag) : null;
-    const gesamt = menge !== null && vk !== null ? menge * vk : null;
+    const pricePer = item.price_per ?? 1;
+    const gesamt =
+      menge !== null && vk !== null ? (menge * vk) / pricePer : null;
 
     return {
       Position: item.position,
-      Artikel: formatArtikelCell(item),
+      Artikel: formatArtikelCell(item, { layoutId }),
       Menge: menge,
-      Einheit: item.unit ?? null,
-      "Einzelpreis PDF (€)": einzelpreisPdf,
-      Aufschlag: aufschlag,
+      Einheit: formatEinheitCell(item.unit, item.description) || null,
       "Einzelpreis (€)": vk,
       "Gesamt (€)": gesamt,
+      "Einzelpreis PDF (€)": einzelpreisPdf,
+      Aufschlag: aufschlag,
     };
   });
 }
 
-export async function pickAndConvert(
+export async function convertPdfFile(
+  file: File,
   aufschlagPercent: number,
-): Promise<ConvertResponse | null> {
-  const file = await pickPdfFile();
-  if (!file) return null;
-
+): Promise<ConvertResponse> {
   const aufschlag = aufschlagPercent / 100;
 
   try {
@@ -110,7 +83,7 @@ export async function pickAndConvert(
     const extraction_mode = profile === "generic" ? "table" : "layout";
 
     const xlsxBytes = await buildExcelBuffer(extraction, { aufschlag });
-    const xlsxBlob = new Blob([xlsxBytes], {
+    const xlsxBlob = new Blob([toArrayBuffer(xlsxBytes)], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
 
@@ -123,7 +96,7 @@ export async function pickAndConvert(
       extraction_mode,
       message: "Konvertierung erfolgreich",
       aufschlag,
-      preview: toPreviewRows(extraction.items, aufschlag),
+      preview: toPreviewRows(extraction.items, aufschlag, extraction.layout_id),
       xlsxBlob,
       outputFileName,
     };

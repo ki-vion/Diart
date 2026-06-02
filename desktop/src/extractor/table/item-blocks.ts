@@ -3,19 +3,37 @@ import { parseDeNumber } from "../utils";
 import { parseRkBlock } from "../profiles/extract-rk-legacy";
 import type { PdfLine } from "../../pdf/types";
 import { isNonItemLine } from "./table-zone";
+import { clusterLineIntoCells } from "./cluster-columns";
+import { parseColumnItemBlock, type ColumnBlockContext } from "./column-block";
 import {
-  clusterLineIntoCells,
-  inferColumnBoundaries,
-  type WordToken,
-} from "./cluster-columns";
+  collectKanLeadingIntro,
+  mergeKanPreamble,
+  splitBlockLinesForParsing,
+} from "./block-gaps";
+import {
+  isBlockTerminatorLine,
+  isPlausibleDescriptionLine,
+  isPlausibleDescriptionLineByBoundaries,
+  trimBlockLines,
+} from "./line-guards";
+import { isKanSplitAnchor, KAN_POS_MERGED, parseKanBlock } from "./kan-block";
+import {
+  extractLaierArticleId,
+  isLaierItemAnchor,
+  parseLaierBlock,
+  parseLaierColumnBlock,
+} from "./laier-block";
+import {
+  isNoritItemAnchor as isNoritAnchorLine,
+  NORIT_POS,
+  parseNoritBlock,
+} from "./norit-block.ts";
 import { HEADER_HINTS, type ColumnRole, type TableColumnMap } from "./header-map";
 
 const RK_HEAD = /^(?<pos>\d{5})\s*(?<art>\d{6,})\b/;
 const RK_HEAD_LINE = /^\d{5}\s*\d{6,}\b/;
-const KAN_HEAD = /^(?<pos>\d{3})\s+Artikelnummer:\s+(?<art>\S+)/i;
-const NORIT_POS = /^\d{3}$/;
+const KAN_HEAD = KAN_POS_MERGED;
 const NORIT_NET = /^(?<net>[\d.,]+)\s+EUR\s*$/i;
-const LAIER_ART = /^\d{8}$/;
 
 const QTY_ONLY = /^[\d.,]+$/;
 const QTY_UNIT_LINE =
@@ -38,7 +56,12 @@ export type BlockAnchor = {
 };
 
 export function scoreHeaderLine(text: string): number {
-  const norm = text.toLowerCase().replace(/\./g, " ").replace(/\s+/g, " ").trim();
+  const norm = text
+    .toLowerCase()
+    .replace(/\./g, " ")
+    .replace(/[-–]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   let score = 0;
   for (const hints of Object.values(HEADER_HINTS)) {
     for (const h of hints) {
@@ -51,31 +74,9 @@ export function scoreHeaderLine(text: string): number {
   return score;
 }
 
-function isLaierAnchor(lines: PdfLine[], i: number): boolean {
-  const art = lines[i]?.text.trim() ?? "";
-  if (!LAIER_ART.test(art)) return false;
-  if (i + 4 >= lines.length) return false;
-  const afterArt = lines[i + 1]?.text.trim() ?? "";
-  if (/artikelnummer|zolltarif|abmessung|produkt\s+zert/i.test(afterArt)) return false;
-  const qty = lines[i + 2]?.text.trim() ?? "";
-  const p3 = lines[i + 3]?.text.trim() ?? "";
-  const p4 = lines[i + 4]?.text.trim() ?? "";
-  return (
-    (QTY_UNIT_LINE.test(qty) || PRICE_ONLY.test(qty)) &&
-    PRICE_ONLY.test(p3) &&
-    PRICE_ONLY.test(p4)
-  );
-}
-
 function isNoritAnchor(lines: PdfLine[], i: number): boolean {
-  const t = lines[i]?.text.trim() ?? "";
-  if (!NORIT_POS.test(t)) return false;
-  const posNum = Number.parseInt(t, 10);
-  if (!Number.isFinite(posNum) || posNum < 1) return false;
-  const next = lines[i + 1]?.text.trim() ?? "";
-  const prev = lines[i - 1]?.text.trim() ?? "";
-  if (NORIT_NET.test(next)) return true;
-  return NORIT_QTY.test(prev);
+  const texts = lines.map((l) => l.text.trim());
+  return isNoritAnchorLine(texts, i);
 }
 
 export function findBlockAnchors(lines: PdfLine[], fromIndex: number): BlockAnchor[] {
@@ -89,11 +90,19 @@ export function findBlockAnchors(lines: PdfLine[], fromIndex: number): BlockAnch
       anchors.push({ lineIndex: i, kind: "rk" });
       continue;
     }
+    if (/^\d{5}$/.test(t) && /^\d{6,}$/.test(lines[i + 1]?.text.trim() ?? "")) {
+      anchors.push({ lineIndex: i, kind: "rk" });
+      continue;
+    }
     if (KAN_HEAD.test(t)) {
       anchors.push({ lineIndex: i, kind: "kan" });
       continue;
     }
-    if (isLaierAnchor(lines, i)) {
+    if (isKanSplitAnchor(lines, i)) {
+      anchors.push({ lineIndex: i, kind: "kan" });
+      continue;
+    }
+    if (isLaierItemAnchor(lines, i)) {
       anchors.push({ lineIndex: i, kind: "laier" });
       continue;
     }
@@ -113,122 +122,53 @@ function shouldSkipBlockLine(t: string): boolean {
   return false;
 }
 
-const NORIT_QTY = /^(?<qty>[\d.,]+)\s+(?<unit>m²|m2|St|kg|l|qm)\s*$/i;
-const NORIT_ART = /^\d{8}$/;
 
-function parseLaierBlock(texts: string[]): LineItem | null {
-  const article_number = texts[0] ?? null;
-  if (texts.length < 4) return null;
-
-  const description = texts[1] ?? "";
-  const qtyLine = texts[2] ?? "";
-  const priceLine = texts[3] ?? "";
-  const totalLine = texts[4] ?? "";
-
-  const qtyMatch = QTY_UNIT_LINE.exec(qtyLine);
-  const quantity = qtyMatch ? parseDeNumber(qtyMatch.groups?.qty ?? "") : parseDeNumber(qtyLine);
-  const unit = qtyMatch?.groups?.unit?.trim() ?? null;
-  const unit_price = parseDeNumber(priceLine);
-  const line_total = parseDeNumber(totalLine);
-
-  if (quantity === null && unit_price === null) return null;
-
-  return {
-    position: null,
-    article_number,
-    description,
-    quantity,
-    unit,
-    unit_price,
-    line_total,
-  };
-}
-
-function parseNoritBlock(texts: string[], lines: PdfLine[]): LineItem | null {
-  const position = texts[0] ?? null;
-  let line_total: number | null = null;
-  let quantity: number | null = null;
-  let unit: string | null = null;
-  let unit_price: number | null = null;
-  let article_number: string | null = null;
-  const descParts: string[] = [];
-
-  if (texts.length > 1 && NORIT_NET.test(texts[1] ?? "")) {
-    const m = NORIT_NET.exec(texts[1] ?? "");
-    line_total = parseDeNumber(m?.groups?.net ?? "");
-  }
-
-  for (let i = 1; i < texts.length; i++) {
-    const t = texts[i]!;
-    if (shouldSkipBlockLine(t)) continue;
-
-    const net = NORIT_NET.exec(t);
-    if (net?.groups) {
-      line_total = parseDeNumber(net.groups.net ?? "");
-      continue;
-    }
-
-    const qty = NORIT_QTY.exec(t);
-    if (qty?.groups) {
-      quantity = parseDeNumber(qty.groups.qty ?? "");
-      unit = qty.groups.unit ?? null;
-      continue;
-    }
-
-    const up = UNIT_PRICE_LINE.exec(t);
-    if (up?.groups) {
-      unit_price = parseDeNumber(up.groups.price ?? "");
-      continue;
-    }
-
-    if (NORIT_ART.test(t)) {
-      article_number = t;
-      continue;
-    }
-
-    if (PRICE_ONLY.test(t)) continue;
-    if (t.endsWith("EUR")) continue;
-
-    descParts.push(t);
-  }
-
-  void lines;
-
-  if (line_total === null && quantity === null && unit_price === null) return null;
-  if (line_total === null && unit_price === null) return null;
-
-  return {
-    position,
-    article_number,
-    description: descParts.join(" ").trim(),
-    quantity,
-    unit,
-    unit_price,
-    line_total,
-  };
-}
+export type ItemBlockParseContext = {
+  columnBlock?: ColumnBlockContext;
+};
 
 /** Parse stacked lines between two position anchors (RK, KAN, Norit, Laier). */
 export function parseItemBlock(
   lines: PdfLine[],
   boundaries: number[],
   columnMap: TableColumnMap,
+  parseCtx?: ItemBlockParseContext,
 ): LineItem | null {
   const texts = lines.map((l) => l.text.trim()).filter(Boolean);
   if (texts.length === 0) return null;
+
+  const kanBlock = parseKanBlock(lines);
+  if (kanBlock) return kanBlock;
+
+  const rkHead =
+    RK_HEAD.exec(texts[0] ?? "") ??
+    (RK_HEAD_LINE.test(texts[0] ?? "")
+      ? RK_HEAD.exec(texts[0]!.replace(/(\d{5})(\d{6,})/, "$1 $2"))
+      : null);
+  const rkSplit =
+    /^\d{5}$/.test(texts[0] ?? "") && /^\d{6,}$/.test(texts[1] ?? "");
+  const isRkBlock = Boolean(rkHead?.groups || RK_HEAD_LINE.test(texts[0] ?? "") || rkSplit);
+
+  if (isRkBlock && parseCtx?.columnBlock) {
+    const fromColumns = parseColumnItemBlock(lines, parseCtx.columnBlock);
+    if (fromColumns) return fromColumns;
+  }
 
   let position: string | null = null;
   let article_number: string | null = null;
   let startIdx = 0;
 
-  const rk = RK_HEAD.exec(texts[0] ?? "");
-  if (rk?.groups || RK_HEAD_LINE.test(texts[0] ?? "")) {
+  if (isRkBlock) {
     const fromRk = parseRkBlock(texts);
     if (fromRk) return fromRk;
-    if (rk?.groups) {
-      position = rk.groups.pos ?? null;
-      article_number = rk.groups.art ?? null;
+    if (rkHead?.groups) {
+      position = rkHead.groups.pos ?? null;
+      article_number = rkHead.groups.art ?? null;
       startIdx = 1;
+    } else if (rkSplit) {
+      position = texts[0] ?? null;
+      article_number = texts[1] ?? null;
+      startIdx = 2;
     }
   }
 
@@ -240,10 +180,13 @@ export function parseItemBlock(
   }
 
   if (NORIT_POS.test(texts[0] ?? "")) {
-    return parseNoritBlock(texts, lines);
+    return parseNoritBlock(texts);
   }
 
-  if (LAIER_ART.test(texts[0] ?? "")) {
+  if (extractLaierArticleId(texts[0] ?? "")) {
+    if (parseCtx?.columnBlock) {
+      return parseLaierColumnBlock(lines, parseCtx.columnBlock);
+    }
     return parseLaierBlock(texts);
   }
 
@@ -256,9 +199,12 @@ export function parseItemBlock(
   const descParts: string[] = [];
   const priceDecimals: number[] = [];
 
+  const windows = parseCtx?.columnBlock?.windows;
+
   for (let i = startIdx; i < texts.length; i++) {
     const t = texts[i]!;
     if (shouldSkipBlockLine(t)) continue;
+    if (isBlockTerminatorLine(t)) break;
     if (isNonItemLine(lines[i]!, 842)) break;
 
     if (NORIT_NET.test(t)) {
@@ -281,7 +227,18 @@ export function parseItemBlock(
       if (fromCols.unit) state.unit ??= fromCols.unit;
       if (fromCols.unit_price !== undefined) state.unit_price ??= fromCols.unit_price;
       if (fromCols.line_total !== undefined) state.line_total ??= fromCols.line_total;
-      if (fromCols.description) descParts.push(fromCols.description);
+      if (fromCols.description) {
+        const line = lines[i]!;
+        const plausible = windows
+          ? isPlausibleDescriptionLine(line, windows)
+          : boundaries.length > 0
+            ? isPlausibleDescriptionLineByBoundaries(line, boundaries)
+            : true;
+        if (plausible) {
+          const full = line.text.trim();
+          descParts.push(full.length >= fromCols.description.length ? full : fromCols.description);
+        }
+      }
       continue;
     }
 
@@ -326,7 +283,13 @@ export function parseItemBlock(
     if (t.startsWith("=")) continue;
 
     if (!RK_HEAD.test(t) && !KAN_HEAD.test(t) && !NORIT_POS.test(t)) {
-      descParts.push(t);
+      const line = lines[i]!;
+      const plausible = windows
+        ? isPlausibleDescriptionLine(line, windows)
+        : boundaries.length > 0
+          ? isPlausibleDescriptionLineByBoundaries(line, boundaries)
+          : true;
+      if (plausible) descParts.push(t);
     }
   }
 
@@ -349,7 +312,8 @@ export function parseItemBlock(
   return {
     position,
     article_number,
-    description: descParts.join(" ").trim(),
+    artikel_prefix: null,
+    description: descParts.join("\n").trim(),
     quantity: state.quantity,
     unit: state.unit,
     unit_price: state.unit_price,
@@ -405,6 +369,7 @@ export function extractBlocksFromPage(
     boundaries: number[];
     columnMap: TableColumnMap;
   },
+  parseCtx?: ItemBlockParseContext,
 ): LineItem[] {
   const endLimit = region.dataEndIndex ?? page.lines.length;
   const anchors = findBlockAnchors(page.lines, region.dataStartIndex).filter(
@@ -413,13 +378,40 @@ export function extractBlocksFromPage(
   if (anchors.length === 0) return [];
 
   const items: LineItem[] = [];
+  let preamble: PdfLine[] = [];
+
   for (let a = 0; a < anchors.length; a++) {
     const start = anchors[a]!.lineIndex;
+    const minBefore =
+      a > 0 ? anchors[a - 1]!.lineIndex + 1 : region.dataStartIndex;
+    if (anchors[a]!.kind === "kan") {
+      preamble = mergeKanPreamble(
+        preamble,
+        collectKanLeadingIntro(page.lines, start, minBefore),
+      );
+    }
     const nextStart = a + 1 < anchors.length ? anchors[a + 1]!.lineIndex : endLimit;
     const end = Math.min(nextStart, endLimit);
-    const blockLines = page.lines.slice(start, end);
-    const item = parseItemBlock(blockLines, region.boundaries, region.columnMap);
-    if (item) items.push(item);
+    const anchorLine = page.lines[start]!;
+    const rawBlock = trimBlockLines(
+      [anchorLine, ...page.lines.slice(start + 1, end)],
+      { windows: parseCtx?.columnBlock?.windows },
+    );
+
+    const { parseLines, carryToNext } = splitBlockLinesForParsing(rawBlock);
+
+    const item = parseItemBlock(parseLines, region.boundaries, region.columnMap, parseCtx);
+    if (item && (item.position ?? item.article_number)) {
+      if (preamble.length > 0) {
+        item.artikel_prefix = preamble
+          .map((l) => l.text.trim())
+          .filter(Boolean)
+          .join("\n");
+      }
+      items.push(item);
+    }
+
+    preamble = carryToNext;
   }
   return items;
 }

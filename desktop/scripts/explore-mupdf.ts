@@ -3,13 +3,21 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildStructuredFromPdf } from "./lib/build-structured.js";
 import { dumpPage, wordsToTsv } from "./lib/dump-structured.js";
-import { cellsToTsv, linesToTsv } from "./lib/lines-to-tsv.js";
+import { explorePipelineInfo } from "./lib/explore-extraction.js";
+import { cellsToTsv, linesWithExploreMetaToTsv } from "./lib/lines-to-tsv.js";
+import {
+  exploreLineFlags,
+  getPageTableMeta,
+  serializeTableRegion,
+} from "../src/extractor/table/line-meta.js";
 import { loadMupdf } from "./lib/mupdf-node.js";
 import { detectProfile } from "../src/extractor/profiles/detect-profile.js";
+import { extractByProfile } from "../src/extractor/profiles/index.js";
 import { calibrateColumnWindows, lineToCells, trimCells } from "../src/extractor/pipeline/columns.js";
 import { NORIT_TEMPLATE, RK_STARK_TEMPLATE } from "../src/extractor/pipeline/templates.js";
 import type { PdfProfile } from "../src/extractor/profiles/types.js";
 import type { TableTemplate } from "../src/extractor/pipeline/types.js";
+import { noritLineToCells } from "../src/extractor/table/norit-structured.js";
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const desktopDir = path.resolve(scriptsDir, "..");
@@ -23,9 +31,9 @@ function safeName(p: string): string {
 
 function templateForProfile(profile: PdfProfile): TableTemplate | null {
   switch (profile) {
-    case "rk_stark":
+    case "RAAB Karcher":
       return RK_STARK_TEMPLATE;
-    case "norit_rechnung":
+    case "Norit":
       return NORIT_TEMPLATE;
     default:
       return null;
@@ -105,36 +113,67 @@ async function explorePdf(
 
   const structured = buildStructuredFromPdf(mupdf, pdfPath);
   const profile = detectProfile(structured);
-  const template = templateForProfile(profile);
-  const profileMeta: Record<string, unknown> = { profile };
+  const pipelineInfo = explorePipelineInfo(profile);
+  const source = structured.sourceFileName ?? path.basename(pdfPath);
+  const extraction = extractByProfile(structured, profile, source);
 
-  if (template) {
-    const windows = calibrateColumnWindows(
-      structured.pages,
-      template.headerHints,
-      template.defaultWindows,
-    );
+  const template = templateForProfile(profile);
+  const profileMeta: Record<string, unknown> = {
+    profile,
+    extractionSource: pipelineInfo.extractionSource,
+    anchorSource: pipelineInfo.anchorSource,
+    itemCount: extraction.items.length,
+    pages: structured.pages.map((page) => {
+      const tableMeta = getPageTableMeta(page);
+      return {
+        index: page.index,
+        tableRegion: serializeTableRegion(tableMeta.region),
+        anchorCount: tableMeta.anchors.length,
+        anchors: tableMeta.anchors.map((a) => ({
+          lineIndex: a.lineIndex,
+          kind: a.kind,
+          text: page.lines[a.lineIndex]?.text ?? "",
+        })),
+      };
+    }),
+  };
+
+  const windows = template
+    ? calibrateColumnWindows(
+        structured.pages,
+        template.headerHints,
+        template.defaultWindows,
+        template.layout_id,
+      )
+    : null;
+
+  if (windows && template) {
     profileMeta.columnWindows = windows;
     profileMeta.columnWindowsHint =
-      "Spaltenfenster in PDF-Punkten (x). Werte aus Header kalibriert oder defaultWindows in pipeline/templates.ts";
+      "Spaltenfenster in PDF-Punkten (x). Kalibriert aus Pos/Artikel/Menge/Einzelpreis/Nettowert im Header.";
+  }
 
-    const catchAll = template.descriptionCatchAllMaxX ?? 320;
-    const assign = (line: (typeof structured.pages)[0]["lines"][0]) =>
-      trimCells(lineToCells(line, windows, catchAll));
+  const catchAll = template?.descriptionCatchAllMaxX ?? 320;
+  const assignCells = windows
+    ? (line: (typeof structured.pages)[0]["lines"][0]) => {
+        if (profile === "Norit") {
+          return noritLineToCells(line, windows) as Record<string, string>;
+        }
+        return trimCells(lineToCells(line, windows, catchAll)) as Record<string, string>;
+      }
+    : null;
 
-    for (const page of structured.pages) {
-      const prefix = path.join(outDir, `page-${String(page.index).padStart(2, "0")}`);
-      fs.writeFileSync(`${prefix}-lines.tsv`, linesToTsv(page.lines), "utf8");
-      fs.writeFileSync(
-        `${prefix}-cells.tsv`,
-        cellsToTsv(page.lines, (l) => assign(l) as Record<string, string>),
-        "utf8",
-      );
-    }
-  } else {
-    for (const page of structured.pages) {
-      const prefix = path.join(outDir, `page-${String(page.index).padStart(2, "0")}`);
-      fs.writeFileSync(`${prefix}-lines.tsv`, linesToTsv(page.lines), "utf8");
+  for (const page of structured.pages) {
+    const prefix = path.join(outDir, `page-${String(page.index).padStart(2, "0")}`);
+    const tableMeta = getPageTableMeta(page);
+    const lineFlags = page.lines.map((_, i) => exploreLineFlags(page, i, tableMeta));
+    fs.writeFileSync(
+      `${prefix}-lines.tsv`,
+      linesWithExploreMetaToTsv(page.lines, lineFlags),
+      "utf8",
+    );
+    if (assignCells) {
+      fs.writeFileSync(`${prefix}-cells.tsv`, cellsToTsv(page.lines, assignCells), "utf8");
     }
   }
 
@@ -145,6 +184,9 @@ async function explorePdf(
   );
 
   console.log(`Wrote ${outDir} (${summary.pageCount} pages, profile=${profile})`);
+  if (assignCells) {
+    console.log(`  + page-XX-cells.tsv (header-calibrated X columns)`);
+  }
 }
 
 async function main() {

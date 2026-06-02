@@ -18,6 +18,14 @@ const EUR_PER = /EUR\s*\/\s*1/i;
 const SKIP =
   /^(<b>|pos\.|artikel-nr|menge|me|einzel|pos\.-wert|artikelbezeichnung|in eur|übertrag|seite\s)/i;
 
+/** VPE / Gebinde in der Artikelspalte (z. B. „1 kg/Fl“), nicht Rechnungsmenge. */
+const RK_PACKAGING_SPEC =
+  /^[\d.,]+\s+(?:kg|g|l|ml|m|meter|st|stk|stück)\s*\/\s*\w+/i;
+
+function isRkPackagingLine(t: string): boolean {
+  return RK_PACKAGING_SPEC.test(t.trim());
+}
+
 function normalizeRkBlock(texts: string[]): string[] {
   const trimmed = texts.map((t) => t.trim()).filter(Boolean);
   if (!trimmed.length) return [];
@@ -62,10 +70,19 @@ function consumeRkLine(
     return;
   }
 
+  if (isRkPackagingLine(t)) {
+    descParts.push(t);
+    return;
+  }
+
   const qtyUnit = QTY_UNIT_LINE.exec(t) ?? QTY_UNIT_MERGED.exec(t);
   if (qtyUnit?.groups?.qty) {
-    state.quantity ??= parseDeNumber(qtyUnit.groups.qty);
-    if (qtyUnit.groups.unit) state.unit ??= qtyUnit.groups.unit.trim();
+    if (state.quantity !== null) {
+      descParts.push(t);
+      return;
+    }
+    state.quantity = parseDeNumber(qtyUnit.groups.qty);
+    if (qtyUnit.groups.unit) state.unit = qtyUnit.groups.unit.trim();
     return;
   }
 
@@ -87,6 +104,11 @@ function consumeRkLine(
     if (n !== null && n !== state.quantity && n <= MAX_PLAUSIBLE_PRICE) {
       priceDecimals.push(n);
     }
+    return;
+  }
+
+  if (/^Alternativposition\s+zu\s+Position/i.test(t)) {
+    descParts.push(t);
     return;
   }
 
@@ -138,10 +160,16 @@ function parseRkAnchorTail(
 export function parseRkBlock(texts: string[]): LineItem | null {
   const normalized = normalizeRkBlock(texts.map((t) => t.trim()).filter(Boolean));
   const head = RK_HEAD.exec(normalized[0]?.trim() ?? "");
-  if (!head?.groups) return null;
+  const splitHead =
+    !head?.groups &&
+    /^\d{5}$/.test(normalized[0]?.trim() ?? "") &&
+    /^\d{6,}$/.test(normalized[1]?.trim() ?? "");
 
-  const position = head.groups.pos ?? null;
-  const article_number = head.groups.art ?? null;
+  if (!head?.groups && !splitHead) return null;
+
+  const position = head?.groups?.pos ?? (splitHead ? normalized[0]!.trim() : null);
+  const article_number =
+    head?.groups?.art ?? (splitHead ? normalized[1]!.trim() : null);
 
   const state = {
     quantity: null as number | null,
@@ -152,10 +180,10 @@ export function parseRkBlock(texts: string[]): LineItem | null {
   const descParts: string[] = [];
   const priceDecimals: number[] = [];
 
-  const tail = (head.groups.tail ?? "").trim();
+  const tail = (head?.groups?.tail ?? "").trim();
   if (tail) parseRkAnchorTail(tail, state);
 
-  for (let i = 1; i < normalized.length; i++) {
+  for (let i = splitHead ? 2 : 1; i < normalized.length; i++) {
     const t = normalized[i]?.trim() ?? "";
     if (isRkNonItemText(t)) break;
     consumeRkLine(t, state, descParts, priceDecimals);
@@ -181,7 +209,8 @@ export function parseRkBlock(texts: string[]): LineItem | null {
   return {
     position,
     article_number,
-    description: descParts.join(" ").trim(),
+    artikel_prefix: null,
+    description: descParts.join("\n").trim(),
     quantity: state.quantity,
     unit: state.unit,
     unit_price: state.unit_price,

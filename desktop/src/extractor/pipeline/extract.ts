@@ -8,25 +8,15 @@ const EUR_PER = /EUR\s*\/\s*1/i;
 import type { PdfLine, PdfStructured } from "../../pdf/types";
 import type { ColumnRole } from "../table/header-map";
 import { calibrateColumnWindows, lineToCells, trimCells } from "./columns";
-import type { RowCells, TableTemplate } from "./types";
+import type { ColumnWindow, RowCells, TableTemplate } from "./types";
+import { isPlausibleDescriptionLine } from "../table/line-guards";
+import { isBlockAnchorInTable } from "../table/line-meta";
 import { isNonItemLine } from "../table/table-zone";
 import { findTableRegionOrContinuation } from "../table/table-region";
 
 function isFooter(text: string): boolean {
   const t = text.trim();
   return /^(summe|gesamt|übertrag|seite\s+\d|nettowert|ust|endsumme)/i.test(t);
-}
-
-function isAnchorLine(
-  template: TableTemplate,
-  line: PdfLine,
-  cells: RowCells,
-): boolean {
-  const text = line.text.trim();
-  if (template.lineAnchorPattern?.test(text)) return true;
-
-  const anchorText = (cells[template.anchorRole] ?? "").trim();
-  return Boolean(anchorText && template.anchorPattern.test(anchorText));
 }
 
 function parseAnchorFields(
@@ -46,7 +36,7 @@ function parseAnchorFields(
   const pos = (cells.position ?? "").trim();
   const art = (cells.article ?? "").trim();
 
-  if (template.layout_id === "rk_stark" && pos && /^\d{5}\s+\d{6,}/.test(`${pos} ${art}`.trim())) {
+  if (template.layout_id === "RAAB Karcher" && pos && /^\d{5}\s+\d{6,}/.test(`${pos} ${art}`.trim())) {
     const m = /^(\d{5})\s+(\d{6,})/.exec(`${pos} ${art}`.trim());
     return { position: m?.[1] ?? pos, article_number: m?.[2] ?? art };
   }
@@ -57,10 +47,18 @@ function parseAnchorFields(
   };
 }
 
-function mergeCellsIntoItem(item: LineItem, cells: RowCells, lineText: string): void {
+function mergeCellsIntoItem(
+  item: LineItem,
+  cells: RowCells,
+  lineText: string,
+  line?: PdfLine,
+  windows?: ColumnWindow[],
+): void {
   const desc = cells.description?.trim();
   if (desc) {
-    item.description = item.description ? `${item.description} ${desc}`.trim() : desc;
+    if (!windows || !line || isPlausibleDescriptionLine(line, windows)) {
+      item.description = item.description ? `${item.description}\n${desc}`.trim() : desc;
+    }
   }
 
   const qty = parseDeNumber(cells.quantity ?? "");
@@ -104,6 +102,7 @@ function emptyItem(
   return {
     position,
     article_number,
+    artikel_prefix: null,
     description: "",
     quantity: null,
     unit: null,
@@ -134,6 +133,7 @@ export function extractWithTemplate(
     structured.pages,
     template.headerHints,
     template.defaultWindows,
+    template.layout_id,
   );
   const catchAll = template.descriptionCatchAllMaxX ?? 320;
 
@@ -157,8 +157,8 @@ export function extractWithTemplate(
 
       const cells = trimCells(lineToCells(line, windows, catchAll));
 
-      if (isAnchorLine(template, line, cells)) {
-        if (template.layout_id === "norit_rechnung") {
+      if (isBlockAnchorInTable(pageLines, li, dataStart, dataEnd, page.height)) {
+        if (template.layout_id === "Norit") {
           const pos = (cells.position ?? "").trim();
           const n = Number.parseInt(pos, 10);
           const next = pageLines[li + 1]?.text.trim() ?? "";
@@ -169,7 +169,9 @@ export function extractWithTemplate(
             (NORIT_NET.test(next) || NORIT_QTY.test(prev));
           if (!validNorit) {
             if (current && isDescriptionOnlyRow(cells, template.anchorRole)) {
-              mergeCellsIntoItem(current, cells, text);
+              if (isPlausibleDescriptionLine(line, windows)) {
+                mergeCellsIntoItem(current, cells, text, line, windows);
+              }
             }
             continue;
           }
@@ -179,17 +181,19 @@ export function extractWithTemplate(
         const { position, article_number } = parseAnchorFields(template, line, cells);
         current = emptyItem(position, article_number);
         const prevText = pageLines[li - 1]?.text.trim() ?? "";
-        if (template.layout_id === "norit_rechnung" && NORIT_QTY.test(prevText)) {
+        if (template.layout_id === "Norit" && NORIT_QTY.test(prevText)) {
           mergeCellsIntoItem(current, {}, prevText);
         }
-        mergeCellsIntoItem(current, cells, text);
+        mergeCellsIntoItem(current, cells, text, line, windows);
         continue;
       }
 
       if (!current) continue;
 
       if (isDescriptionOnlyRow(cells, template.anchorRole)) {
-        mergeCellsIntoItem(current, cells, text);
+        if (isPlausibleDescriptionLine(line, windows)) {
+          mergeCellsIntoItem(current, cells, text, line, windows);
+        }
         continue;
       }
 
@@ -203,7 +207,7 @@ export function extractWithTemplate(
           NORIT_QTY.test(text) ||
           UNIT_PRICE_LINE.test(text),
       );
-      if (hasData) mergeCellsIntoItem(current, cells, text);
+      if (hasData) mergeCellsIntoItem(current, cells, text, line, windows);
     }
   }
 

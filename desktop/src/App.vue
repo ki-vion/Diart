@@ -1,33 +1,40 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { pickAndConvert, type ConvertResponse, type PreviewRow } from "./lib/convert";
+import { convertPdfFile, type ConvertResponse, type PreviewRow } from "./lib/convert";
 import { downloadBlob } from "./lib/download";
 
 const aufschlagPercent = ref(20);
 const loading = ref(false);
 const result = ref<ConvertResponse | null>(null);
 const error = ref("");
+const pdfInput = ref<HTMLInputElement | null>(null);
 
 const previewColumns = [
   "Position",
   "Artikel",
   "Menge",
   "Einheit",
-  "Einzelpreis PDF (€)",
-  "Aufschlag",
   "Einzelpreis (€)",
   "Gesamt (€)",
+  "Einzelpreis PDF (€)",
+  "Aufschlag",
 ] as const;
 
-async function convert() {
+function openFilePicker() {
+  pdfInput.value?.click();
+}
+
+async function onPdfSelected(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.item(0);
+  input.value = "";
+  if (!file) return;
+
   loading.value = true;
   error.value = "";
   result.value = null;
   try {
-    const res = await pickAndConvert(aufschlagPercent.value);
-    if (!res) {
-      return;
-    }
+    const res = await convertPdfFile(file, aufschlagPercent.value);
     result.value = res;
     if (!res.ok) {
       error.value = res.error ?? "Konvertierung fehlgeschlagen";
@@ -58,7 +65,7 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
     <header>
       <h1>Diart — PDF zu Excel</h1>
       <p class="subtitle">
-        Angebote/Rechnungen extrahieren · Format „Materialliste mit VK Preis“
+        Extrahiert Materialtabellen aus PDFs und exportiert als Excel
       </p>
     </header>
 
@@ -76,9 +83,19 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
       <p class="hint">
         VK-Einzelpreis = PDF-Preis × (1 + Aufschlag/100). Standard: 20 %.
       </p>
-      <button type="button" class="primary" :disabled="loading" @click="convert">
-        {{ loading ? "Wird konvertiert…" : "PDF auswählen & konvertieren" }}
-      </button>
+      <div class="convert-row">
+        <input
+          ref="pdfInput"
+          type="file"
+          accept="application/pdf,.pdf"
+          class="file-input"
+          :disabled="loading"
+          @change="onPdfSelected"
+        />
+        <button type="button" class="primary" :disabled="loading" @click="openFilePicker">
+          {{ loading ? "Wird konvertiert…" : "PDF auswählen & konvertieren" }}
+        </button>
+      </div>
     </section>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -98,7 +115,7 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
     </section>
 
     <section v-if="result?.preview?.length" class="card">
-      <h2>Vorschau (erste Zeilen)</h2>
+      <h2>Vorschau</h2>
       <div class="table-wrap">
         <table>
           <thead>
@@ -108,7 +125,13 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
           </thead>
           <tbody>
             <tr v-for="(row, idx) in result.preview" :key="idx">
-              <td v-for="col in previewColumns" :key="col">{{ cell(row, col) }}</td>
+              <td
+                v-for="col in previewColumns"
+                :key="col"
+                :class="{ 'cell-multiline': col === 'Artikel' }"
+              >
+                {{ cell(row, col) }}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -171,6 +194,25 @@ header h1 {
   color: #666;
 }
 
+.convert-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .primary {
   align-self: flex-start;
   padding: 0.65rem 1.25rem;
@@ -215,5 +257,11 @@ td {
 
 th {
   background: #f5f5f5;
+}
+
+td.cell-multiline {
+  white-space: pre-line;
+  vertical-align: top;
+  min-width: 14rem;
 }
 </style>

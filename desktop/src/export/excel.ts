@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import type { ExtractionResult } from "../extractor/models";
-import { formatArtikelCell } from "./format-artikel";
+import { formatArtikelCell, formatEinheitCell } from "./format-artikel";
 
 export type BuildExcelOptions = {
   /**
@@ -9,16 +9,73 @@ export type BuildExcelOptions = {
   aufschlag: number;
 };
 
-const HEADERS = [
-  "Pos.",
+/** Matches Vorlagen/Materialliste mit VK Preis.xlsx (A–I, G empty). */
+export const MATERIALLISTE_HEADERS = [
+  "Position",
   "Artikel",
   "Menge",
   "Einheit",
-  "Einzelpreis PDF (€)",
-  "Aufschlag",
   "Einzelpreis (€)",
   "Gesamt (€)",
+  "",
+  "Einzelpreis PDF (€)",
+  "Aufschlag",
 ] as const;
+
+const MWST_RATE = 0.19;
+const FOOTER_GAP_ROWS = 2;
+
+function boldRow(row: ExcelJS.Row): void {
+  row.eachCell({ includeEmpty: true }, (cell) => {
+    cell.font = { ...cell.font, bold: true };
+  });
+}
+
+function addSummaryFooters(sheet: ExcelJS.Worksheet, firstDataRow: number, lastDataRow: number): void {
+  for (let i = 0; i < FOOTER_GAP_ROWS; i++) {
+    sheet.addRow([]);
+  }
+
+  const sumRange = `F${firstDataRow}:F${lastDataRow}`;
+
+  const nettoRowNum = sheet.rowCount + 1;
+  sheet.addRow([
+    null,
+    null,
+    null,
+    null,
+    "Gesamt Netto",
+    { formula: `SUM(${sumRange})` },
+    null,
+    null,
+    null,
+  ]);
+
+  const mwstRowNum = sheet.rowCount + 1;
+  sheet.addRow([
+    null,
+    null,
+    null,
+    null,
+    "Mwst. 19%",
+    { formula: `F${nettoRowNum}*${MWST_RATE}` },
+    null,
+    null,
+    null,
+  ]);
+
+  sheet.addRow([
+    null,
+    null,
+    null,
+    null,
+    "Gesamtbetrag",
+    { formula: `F${nettoRowNum}+F${mwstRowNum}` },
+    null,
+    null,
+    null,
+  ]);
+}
 
 export async function buildExcelBuffer(
   result: ExtractionResult,
@@ -27,37 +84,54 @@ export async function buildExcelBuffer(
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Materialliste");
 
-  sheet.addRow([...HEADERS]);
+  sheet.addRow([...MATERIALLISTE_HEADERS]);
+  boldRow(sheet.getRow(1));
+
+  const artikelCol = sheet.getColumn(2);
+  artikelCol.width = 48;
+  artikelCol.alignment = { wrapText: true, vertical: "top" };
 
   const aufschlagFactor = opts.aufschlag ?? 0;
+  const firstDataRow = 2;
 
   for (const item of result.items) {
-    const rowIndex = sheet.rowCount + 1; // next row number (1-based)
+    const rowIndex = sheet.rowCount + 1;
 
     const menge = item.quantity ?? null;
     const einzelpreisPdf = item.unit_price ?? null;
 
     const vk =
       menge !== null && einzelpreisPdf !== null ? einzelpreisPdf * (1 + aufschlagFactor) : null;
-    const gesamt = menge !== null && vk !== null ? menge * vk : null;
+    const pricePer = item.price_per ?? 1;
+    const gesamt =
+      menge !== null && vk !== null ? (menge * vk) / pricePer : null;
+    const gesamtFormula =
+      pricePer > 1
+        ? `E${rowIndex}*C${rowIndex}/${pricePer}`
+        : `E${rowIndex}*C${rowIndex}`;
 
-    sheet.addRow([
+    const row = sheet.addRow([
       item.position ?? "",
-      formatArtikelCell(item),
+      formatArtikelCell(item, { layoutId: result.layout_id }),
       menge,
-      item.unit ?? "",
+      formatEinheitCell(item.unit, item.description),
+      { formula: `H${rowIndex}*(1+I${rowIndex})`, result: vk ?? undefined },
+      { formula: gesamtFormula, result: gesamt ?? undefined },
+      null,
       einzelpreisPdf,
       aufschlagFactor,
-      { formula: `E${rowIndex}*(1+F${rowIndex})`, result: vk ?? undefined },
-      { formula: `C${rowIndex}*G${rowIndex}`, result: gesamt ?? undefined },
     ]);
+    row.getCell(2).alignment = { wrapText: true, vertical: "top" };
+  }
+
+  const lastDataRow = sheet.rowCount;
+  if (lastDataRow >= firstDataRow) {
+    addSummaryFooters(sheet, firstDataRow, lastDataRow);
   }
 
   const raw = await workbook.xlsx.writeBuffer();
   if (raw instanceof Uint8Array) return raw;
   if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
-  // Node can return a Buffer, which is a Uint8Array
   if (typeof raw === "object" && raw && "byteLength" in raw) return raw as Uint8Array;
   throw new Error("EXCEL_WRITEBUFFER_UNEXPECTED_TYPE");
 }
-

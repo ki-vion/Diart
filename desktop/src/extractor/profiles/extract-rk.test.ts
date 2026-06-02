@@ -55,4 +55,44 @@ describe("parseRkBlock", () => {
     expect(item?.unit_price).toBe(66.7);
     expect(item?.line_total).toBe(1934.3);
   });
+
+  it("keeps packaging spec in description after billing quantity (00050-style)", () => {
+    const item = parseRkBlock([
+      "00050",
+      "330235",
+      "5 FL",
+      "18,30",
+      "EUR/1 FL",
+      "91,50",
+      "Fermacell Estrichkleber !Z",
+      "1 kg/Fl",
+    ]);
+
+    expect(item?.position).toBe("00050");
+    expect(item?.article_number).toBe("330235");
+    expect(item?.quantity).toBe(5);
+    expect(item?.unit).toBe("FL");
+    expect(item?.description).toContain("Fermacell Estrichkleber !Z");
+    expect(item?.description).toContain("1 kg/Fl");
+    expect(item?.description).toMatch(/Fermacell[\s\S]*\n1 kg\/Fl/);
+  });
+
+  it("keeps spaces and line breaks in multi-line description", () => {
+    const item = parseRkBlock([
+      "00010 9802917",
+      "<B>",
+      "Doppelstabmatte schwere Ausführung",
+      "29 ST",
+      "66,70",
+      "EUR/1 ST",
+      "1.934,30",
+      "2508x1830 mm, MW 50x200 mm, Typ 8/6/8,",
+      "feuerverzinkt",
+    ]);
+
+    expect(item?.description).toContain("Doppelstabmatte schwere Ausführung");
+    expect(item?.description).not.toMatch(/Doppelstabmatteschwere/);
+    expect(item?.description).toContain("\n");
+    expect(item?.description).toContain("feuerverzinkt");
+  });
 });

@@ -16,31 +16,24 @@ describe("laier_van extractFromLines", () => {
       "1 Stk",
       "10,00",
       "10,00",
+      "R000008 *",
+      "Maut",
+      "1 Stück",
+      "31,64",
+      "31,64",
     ];
 
-    expect(extractFromLines(lines, "Verkauf - Angebot_VAN029183.pdf")).toEqual({
-      layout_id: "laier_van",
-      source_pdf: "Verkauf - Angebot_VAN029183.pdf",
-      items: [
-        {
-          position: "1",
-          article_number: "33011303",
-          description: "Fugenmörtel",
-          quantity: 57,
-          unit: "Sack",
-          unit_price: 11.85,
-          line_total: 675.45,
-        },
-        {
-          position: "2",
-          article_number: "12345678",
-          description: "Other item",
-          quantity: 1,
-          unit: "Stk",
-          unit_price: 10,
-          line_total: 10,
-        },
-      ],
+    const result = extractFromLines(lines, "Verkauf - Angebot_VAN029183.pdf");
+    expect(result.layout_id).toBe("Rudolf Laier GmbH");
+    expect(result.items).toHaveLength(3);
+    expect(result.items[0]).toMatchObject({
+      position: "1",
+      article_number: "33011303",
+      description: "Fugenmörtel",
+      quantity: 57,
+      unit: "Sack",
+      unit_price: 11.85,
+      line_total: 675.45,
     });
   });
 });

@@ -6,7 +6,8 @@ import {
 } from "./cluster-columns";
 import { HEADER_HINTS, type ColumnRole, type TableColumnMap } from "./header-map";
 import { findBlockAnchors, scoreHeaderLine } from "./item-blocks";
-import { isNonItemLine, isPostTableText } from "./table-zone";
+import { isHardTableEndLine } from "./line-guards";
+import { isNonItemLine, isPageImprintLine, isPostTableText } from "./table-zone";
 
 export type TableRegion = {
   headerStart: number;
@@ -106,8 +107,13 @@ export function findTableEndIndex(
       sawAnchor = true;
     }
 
-    if (isNonItemLine(line, pageHeight)) {
+    if (isHardTableEndLine(text)) {
       return i;
+    }
+
+    if (isNonItemLine(line, pageHeight)) {
+      if (sawAnchor) return i;
+      continue;
     }
 
     if (sawAnchor && isPostTableText(text)) {
@@ -118,25 +124,138 @@ export function findTableEndIndex(
   return lines.length;
 }
 
+type HeaderBlock = { start: number; end: number; score: number };
+
+/** Contiguous header row clusters (POS./MENGE/…); footer imprint also matches hints and must be ignored. */
+function findHeaderBlocks(
+  lines: PdfLine[],
+  pageHeight: number,
+): HeaderBlock[] {
+  const blocks: HeaderBlock[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i]!;
+    if (isPageImprintLine(line, pageHeight) || isNonItemLine(line, pageHeight)) {
+      i += 1;
+      continue;
+    }
+
+    const score = scoreHeaderLine(line.text);
+    if (score <= 0) {
+      i += 1;
+      continue;
+    }
+
+    const start = i;
+    let end = i;
+    let blockScore = score;
+    i += 1;
+
+    while (i < lines.length) {
+      const nextLine = lines[i]!;
+      const next = nextLine.text.trim();
+      if (!next) {
+        end = i;
+        i += 1;
+        continue;
+      }
+      if (findBlockAnchors(lines, i).some((a) => a.lineIndex === i)) {
+        break;
+      }
+      if (isPageImprintLine(nextLine, pageHeight) || isNonItemLine(nextLine, pageHeight)) {
+        break;
+      }
+      const nextScore = scoreHeaderLine(next);
+      if (nextScore > 0 || /^(in\s+eur|me|pe)$/i.test(next)) {
+        end = i;
+        blockScore += nextScore;
+        i += 1;
+        continue;
+      }
+      break;
+    }
+
+    blocks.push({ start, end, score: blockScore });
+  }
+
+  return blocks;
+}
+
+function pickHeaderBlock(lines: PdfLine[], blocks: HeaderBlock[]): HeaderBlock | null {
+  if (blocks.length === 0) return null;
+
+  let best: HeaderBlock | null = null;
+  let bestAnchors = -1;
+
+  for (const block of blocks) {
+    const anchors = findBlockAnchors(lines, block.end + 1).filter(
+      (a) => a.lineIndex <= block.end + 30,
+    );
+    if (anchors.length > bestAnchors) {
+      bestAnchors = anchors.length;
+      best = block;
+    }
+  }
+
+  if (best && bestAnchors > 0) return best;
+
+  return blocks.reduce((a, b) => (b.score > a.score ? b : a));
+}
+
+function regionHasAnchors(
+  lines: PdfLine[],
+  region: TableRegion,
+): boolean {
+  return (
+    findBlockAnchors(lines, region.dataStartIndex).filter(
+      (a) => a.lineIndex < region.dataEndIndex,
+    ).length > 0
+  );
+}
+
+function buildContinuationRegion(page: {
+  lines: PdfLine[];
+  height?: number;
+}): TableRegion | null {
+  const pageHeight = page.height ?? 842;
+  let dataStart = 0;
+  for (let i = 0; i < page.lines.length; i++) {
+    const line = page.lines[i]!;
+    if (!isNonItemLine(line, pageHeight) && line.text.trim()) {
+      dataStart = i;
+      break;
+    }
+  }
+
+  const anchors = findBlockAnchors(page.lines, dataStart);
+  if (anchors.length === 0) return null;
+
+  const dataStartIndex = Math.min(...anchors.map((a) => a.lineIndex));
+  const dataEndIndex = findTableEndIndex(page, dataStartIndex, [], {});
+
+  return {
+    headerStart: -1,
+    headerEnd: -1,
+    dataStartIndex,
+    dataEndIndex,
+    boundaries: [],
+    columnMap: {},
+  };
+}
+
 export function findTableRegion(page: {
   lines: PdfLine[];
   height?: number;
 }): TableRegion | null {
   const lines = page.lines;
-  let headerStart = -1;
-  let headerEnd = -1;
-  let bestScore = 0;
+  const pageHeight = page.height ?? 842;
+  const headerBlock = pickHeaderBlock(lines, findHeaderBlocks(lines, pageHeight));
+  if (!headerBlock) return null;
 
-  for (let i = 0; i < lines.length; i++) {
-    const score = scoreHeaderLine(lines[i]!.text);
-    if (score > 0) {
-      if (headerStart < 0) headerStart = i;
-      headerEnd = i;
-      bestScore = Math.max(bestScore, score);
-    }
-  }
-
-  if (headerStart < 0) return null;
+  const headerStart = headerBlock.start;
+  let headerEnd = headerBlock.end;
+  const bestScore = headerBlock.score;
 
   while (headerEnd + 1 < lines.length) {
     const next = lines[headerEnd + 1]!.text.trim();
@@ -190,29 +309,7 @@ export function findTableRegionOrContinuation(page: {
   height?: number;
 }): TableRegion | null {
   const found = findTableRegion(page);
-  if (found) return found;
+  if (found && regionHasAnchors(page.lines, found)) return found;
 
-  const pageHeight = page.height ?? 842;
-  let dataStart = 0;
-  for (let i = 0; i < page.lines.length; i++) {
-    const line = page.lines[i]!;
-    if (!isNonItemLine(line, pageHeight) && line.text.trim()) {
-      dataStart = i;
-      break;
-    }
-  }
-
-  const anchors = findBlockAnchors(page.lines, dataStart);
-  if (anchors.length === 0) return null;
-
-  const dataEndIndex = findTableEndIndex(page, dataStart, [], {});
-
-  return {
-    headerStart: -1,
-    headerEnd: -1,
-    dataStartIndex: dataStart,
-    dataEndIndex,
-    boundaries: [],
-    columnMap: {},
-  };
+  return buildContinuationRegion(page);
 }

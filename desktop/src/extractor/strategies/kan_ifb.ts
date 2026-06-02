@@ -1,55 +1,61 @@
 import type { ExtractionResult, LineItem } from "../models";
 import { parseDeNumber } from "../utils";
+import { isKanAnchorLine, KAN_POS_MERGED, parseKanAnchorHead } from "../table/kan-block";
 
-const POS_HEAD = /^(?<pos>\d{3})\s+Artikelnummer:\s+(?<art>\S+)/;
+const KAN_STOP = /^(Pos\.|Übertrag|Betrag EUR|Seite\s+\d)/i;
+const KAN_ALTERNATIV_MARKER = /^alternativ$/i;
 
 export function extractFromLines(lines: string[], source_pdf: string): ExtractionResult {
   const items: LineItem[] = [];
 
   let i = 0;
   while (i < lines.length) {
-    const m = POS_HEAD.exec(lines[i] ?? "");
-    if (!m?.groups) {
+    const line = (lines[i] ?? "").trim();
+    const next = (lines[i + 1] ?? "").trim();
+
+    if (!isKanAnchorLine(line, next)) {
       i += 1;
       continue;
     }
 
-    if (i + 4 >= lines.length) break;
+    const parsed = parseKanAnchorHead(
+      KAN_POS_MERGED.test(line) ? [line] : [line, next],
+    );
+    if (!parsed) {
+      i += 1;
+      continue;
+    }
 
-    const qtyLine = lines[i + 1] ?? "";
-    const unitLine = lines[i + 2] ?? "";
-    const priceLine = lines[i + 3] ?? "";
-    const totalLine = lines[i + 4] ?? "";
+    const dataStart = i + parsed.startIdx;
+    if (dataStart + 4 > lines.length) break;
 
     const descLines: string[] = [];
-    let j = i + 5;
-    while (j < lines.length && !POS_HEAD.test(lines[j] ?? "")) {
+    let j = dataStart + 4;
+    while (j < lines.length) {
       const l = (lines[j] ?? "").trim();
       if (!l) {
         j += 1;
         continue;
       }
-      if (l === "Pos." || l === "Übertrag" || l === "Betrag EUR" || l.startsWith("Übertrag")) {
-        break;
-      }
+      if (KAN_STOP.test(l) || isKanAnchorLine(l, lines[j + 1])) break;
+      if (KAN_ALTERNATIV_MARKER.test(l)) continue;
       descLines.push(l);
       j += 1;
     }
 
-    const unitTrimmed = unitLine.trim();
     items.push({
-      position: m.groups.pos ?? null,
-      article_number: m.groups.art ?? null,
-      description: descLines.join(" ").trim(),
-      quantity: parseDeNumber(qtyLine),
-      unit: unitTrimmed ? unitTrimmed : null,
-      unit_price: parseDeNumber(priceLine),
-      line_total: parseDeNumber(totalLine),
+      position: parsed.position,
+      article_number: parsed.article_number,
+      artikel_prefix: null,
+      description: descLines.join("\n").trim(),
+      quantity: parseDeNumber(lines[dataStart] ?? ""),
+      unit: (lines[dataStart + 1] ?? "").trim() || null,
+      unit_price: parseDeNumber(lines[dataStart + 2] ?? ""),
+      line_total: parseDeNumber(lines[dataStart + 3] ?? ""),
     });
 
     i = j;
   }
 
-  return { layout_id: "kan_ifb", source_pdf, items };
+  return { layout_id: "IFB GmbH", source_pdf, items };
 }
-

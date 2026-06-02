@@ -8,12 +8,14 @@ function structured(page0: string): PdfStructured {
 
 describe("detectProfile", () => {
   it("detects known suppliers", () => {
-    expect(detectProfile(structured("ANGEBOT\nKAN"))).toBe("kan_ifb");
+    expect(detectProfile(structured("ANGEBOT\nKAN"))).toBe("IFB GmbH");
     expect(detectProfile(structured("Rechnungsnummer:\nEinzelpreis"))).toBe(
-      "norit_rechnung",
+      "Norit",
     );
-    expect(detectProfile(structured("STARK Deutschland"))).toBe("rk_stark");
-    expect(detectProfile(structured("VK-Preis\nVAN0123"))).toBe("laier_van");
+    expect(detectProfile(structured("STARK Deutschland"))).toBe("RAAB Karcher");
+    expect(detectProfile(structured("Rudolf Laier GmbH\nVAN029183"))).toBe(
+      "Rudolf Laier GmbH",
+    );
     expect(detectProfile(structured("unknown"))).toBe("generic");
   });
 });
