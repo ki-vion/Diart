@@ -11,6 +11,12 @@ export type PreviewRow = {
   Aufschlag: number;
 };
 
+export type PreviewTotals = {
+  netto: number;
+  mwst: number;
+  brutto: number;
+};
+
 export type ConvertResponse = {
   ok: boolean;
   layout_id?: string;
@@ -19,10 +25,49 @@ export type ConvertResponse = {
   error?: string;
   aufschlag?: number;
   preview?: PreviewRow[];
+  previewTotals?: PreviewTotals;
   // Web: we return a Blob instead of a filesystem path
   xlsxBlob?: Blob;
   outputFileName?: string;
 };
+
+const MWST_RATE = 0.19;
+
+function vkAndGesamt(
+  item: {
+    quantity: number | null;
+    unit_price: number | null;
+    price_per?: number | null;
+  },
+  aufschlag: number,
+): { vk: number | null; gesamt: number | null } {
+  const menge = item.quantity ?? null;
+  const einzelpreisPdf = item.unit_price ?? null;
+  const vk =
+    menge !== null && einzelpreisPdf !== null ? einzelpreisPdf * (1 + aufschlag) : null;
+  const pricePer = item.price_per ?? 1;
+  const gesamt =
+    menge !== null && vk !== null ? (menge * vk) / pricePer : null;
+  return { vk, gesamt };
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function computePreviewTotals(
+  items: Parameters<typeof toPreviewRows>[0],
+  aufschlag: number,
+): PreviewTotals {
+  const netto = round2(
+    items.reduce((sum, item) => {
+      const { gesamt } = vkAndGesamt(item, aufschlag);
+      return sum + (gesamt ?? 0);
+    }, 0),
+  );
+  const mwst = round2(netto * MWST_RATE);
+  return { netto, mwst, brutto: round2(netto + mwst) };
+}
 
 /** Copy view bytes into a standalone ArrayBuffer (BlobPart-safe for strict DOM typings). */
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -46,11 +91,7 @@ function toPreviewRows(
   return items.slice(0, 25).map((item) => {
     const menge = item.quantity ?? null;
     const einzelpreisPdf = item.unit_price ?? null;
-    const vk =
-      menge !== null && einzelpreisPdf !== null ? einzelpreisPdf * (1 + aufschlag) : null;
-    const pricePer = item.price_per ?? 1;
-    const gesamt =
-      menge !== null && vk !== null ? (menge * vk) / pricePer : null;
+    const { vk, gesamt } = vkAndGesamt(item, aufschlag);
 
     return {
       Position: item.position,
@@ -97,6 +138,7 @@ export async function convertPdfFile(
       message: "Konvertierung erfolgreich",
       aufschlag,
       preview: toPreviewRows(extraction.items, aufschlag, extraction.layout_id),
+      previewTotals: computePreviewTotals(extraction.items, aufschlag),
       xlsxBlob,
       outputFileName,
     };

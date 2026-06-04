@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { convertPdfFile, type ConvertResponse, type PreviewRow } from "./lib/convert";
+import {
+  convertPdfFile,
+  type ConvertResponse,
+  type PreviewRow,
+} from "./lib/convert";
 import { downloadBlob } from "./lib/download";
 
 const aufschlagPercent = ref(20);
@@ -19,6 +23,18 @@ const previewColumns = [
   "Einzelpreis PDF (€)",
   "Aufschlag",
 ] as const;
+
+const MONEY_COLUMNS = new Set<(typeof previewColumns)[number]>([
+  "Einzelpreis (€)",
+  "Gesamt (€)",
+]);
+
+function formatEuro(value: number): string {
+  return value.toLocaleString("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
 
 function openFilePicker() {
   pdfInput.value?.click();
@@ -56,6 +72,9 @@ function download() {
 function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
   const v = row[col as keyof PreviewRow];
   if (v === null || v === undefined) return "";
+  if (typeof v === "number" && MONEY_COLUMNS.has(col)) {
+    return formatEuro(v);
+  }
   return String(v);
 }
 </script>
@@ -116,6 +135,20 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
 
     <section v-if="result?.preview?.length" class="card">
       <h2>Vorschau</h2>
+      <dl v-if="result.previewTotals" class="preview-totals">
+        <div class="preview-totals-row">
+          <dt>Gesamt Netto</dt>
+          <dd>{{ formatEuro(result.previewTotals.netto) }} €</dd>
+        </div>
+        <div class="preview-totals-row">
+          <dt>MwSt. 19 %</dt>
+          <dd>{{ formatEuro(result.previewTotals.mwst) }} €</dd>
+        </div>
+        <div class="preview-totals-row preview-totals-row--brutto">
+          <dt>Gesamt Brutto</dt>
+          <dd>{{ formatEuro(result.previewTotals.brutto) }} €</dd>
+        </div>
+      </dl>
       <div class="table-wrap">
         <table>
           <thead>
@@ -236,6 +269,41 @@ header h1 {
 
 .success p {
   margin: 0.35rem 0;
+}
+
+.preview-totals {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 20rem;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.preview-totals-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 0;
+}
+
+.preview-totals-row dt {
+  margin: 0;
+  font-weight: 500;
+  color: #444;
+}
+
+.preview-totals-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.preview-totals-row--brutto dd {
+  color: #1d4ed8;
 }
 
 .table-wrap {
