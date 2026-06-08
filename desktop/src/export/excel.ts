@@ -9,9 +9,8 @@ export type BuildExcelOptions = {
   aufschlag: number;
 };
 
-/** Matches Vorlagen/Materialliste mit VK Preis.xlsx (A–I, G empty). */
+/** Materialliste export columns (A–H, F empty). */
 export const MATERIALLISTE_HEADERS = [
-  "Position",
   "Artikel",
   "Menge",
   "Einheit",
@@ -36,11 +35,10 @@ function addSummaryFooters(sheet: ExcelJS.Worksheet, firstDataRow: number, lastD
     sheet.addRow([]);
   }
 
-  const sumRange = `F${firstDataRow}:F${lastDataRow}`;
+  const sumRange = `E${firstDataRow}:E${lastDataRow}`;
 
   const nettoRowNum = sheet.rowCount + 1;
   sheet.addRow([
-    null,
     null,
     null,
     null,
@@ -56,9 +54,8 @@ function addSummaryFooters(sheet: ExcelJS.Worksheet, firstDataRow: number, lastD
     null,
     null,
     null,
-    null,
     "Mwst. 19%",
-    { formula: `F${nettoRowNum}*${MWST_RATE}` },
+    { formula: `E${nettoRowNum}*${MWST_RATE}` },
     null,
     null,
     null,
@@ -68,9 +65,8 @@ function addSummaryFooters(sheet: ExcelJS.Worksheet, firstDataRow: number, lastD
     null,
     null,
     null,
-    null,
     "Gesamtbetrag",
-    { formula: `F${nettoRowNum}+F${mwstRowNum}` },
+    { formula: `E${nettoRowNum}+E${mwstRowNum}` },
     null,
     null,
     null,
@@ -87,14 +83,15 @@ export async function buildExcelBuffer(
   sheet.addRow([...MATERIALLISTE_HEADERS]);
   boldRow(sheet.getRow(1));
 
-  const artikelCol = sheet.getColumn(2);
+  const artikelCol = sheet.getColumn(1);
   artikelCol.width = 48;
   artikelCol.alignment = { wrapText: true, vertical: "top" };
 
   const aufschlagFactor = opts.aufschlag ?? 0;
   const firstDataRow = 2;
 
-  for (const item of result.items) {
+  for (let i = 0; i < result.items.length; i++) {
+    const item = result.items[i]!;
     const rowIndex = sheet.rowCount + 1;
 
     const menge = item.quantity ?? null;
@@ -107,21 +104,24 @@ export async function buildExcelBuffer(
       menge !== null && vk !== null ? (menge * vk) / pricePer : null;
     const gesamtFormula =
       pricePer > 1
-        ? `E${rowIndex}*C${rowIndex}/${pricePer}`
-        : `E${rowIndex}*C${rowIndex}`;
+        ? `D${rowIndex}*B${rowIndex}/${pricePer}`
+        : `D${rowIndex}*B${rowIndex}`;
 
     const row = sheet.addRow([
-      item.position ?? "",
       formatArtikelCell(item, { layoutId: result.layout_id }),
       menge,
       formatEinheitCell(item.unit, item.description),
-      { formula: `H${rowIndex}*(1+I${rowIndex})`, result: vk ?? undefined },
+      { formula: `G${rowIndex}*(1+H${rowIndex})`, result: vk ?? undefined },
       { formula: gesamtFormula, result: gesamt ?? undefined },
       null,
       einzelpreisPdf,
       aufschlagFactor,
     ]);
-    row.getCell(2).alignment = { wrapText: true, vertical: "top" };
+    row.getCell(1).alignment = { wrapText: true, vertical: "top" };
+
+    if (i < result.items.length - 1) {
+      sheet.addRow([]);
+    }
   }
 
   const lastDataRow = sheet.rowCount;

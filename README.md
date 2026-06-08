@@ -103,3 +103,7 @@ Beispiel-PDFs zum Testen liegen in `Vorlagen/`.
 
 - Spezifikation: `docs/superpowers/specs/2026-05-28-pwa-offline-mupdf-design.md`
 - Implementierungsplan: `docs/superpowers/plans/2026-05-28-pwa-offline-mupdf-implementation.md`
+
+
+npm run explore:mupdf
+npm run explore:blocks

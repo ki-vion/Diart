@@ -203,6 +203,28 @@ function pickHeaderBlock(lines: PdfLine[], blocks: HeaderBlock[]): HeaderBlock |
   return blocks.reduce((a, b) => (b.score > a.score ? b : a));
 }
 
+/** Laier: billing for an R-code anchor on the prior page (header repeats, no new anchor). */
+function isLaierOrphanContinuation(
+  lines: PdfLine[],
+  region: TableRegion,
+): boolean {
+  const hasLaierHeader =
+    region.columnMap.article !== undefined &&
+    (region.columnMap.quantity !== undefined ||
+      region.columnMap.unit !== undefined ||
+      region.columnMap.unitPrice !== undefined);
+  if (!hasLaierHeader) return false;
+
+  const anchors = findBlockAnchors(lines, region.dataStartIndex).filter(
+    (a) => a.lineIndex < region.dataEndIndex,
+  );
+  if (anchors.length > 0) return false;
+
+  const first = lines[region.dataStartIndex]?.text.trim() ?? "";
+  if (!first || isHardTableEndLine(first)) return false;
+  return true;
+}
+
 function regionHasAnchors(
   lines: PdfLine[],
   region: TableRegion,
@@ -309,7 +331,10 @@ export function findTableRegionOrContinuation(page: {
   height?: number;
 }): TableRegion | null {
   const found = findTableRegion(page);
-  if (found && regionHasAnchors(page.lines, found)) return found;
+  if (found) {
+    if (regionHasAnchors(page.lines, found)) return found;
+    if (isLaierOrphanContinuation(page.lines, found)) return found;
+  }
 
   return buildContinuationRegion(page);
 }

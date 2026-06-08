@@ -1,7 +1,6 @@
 import { formatArtikelCell, formatEinheitCell } from "../export/format-artikel";
 
 export type PreviewRow = {
-  Position: string | null;
   Artikel: string;
   Menge: number | null;
   Einheit: string | null;
@@ -94,7 +93,6 @@ function toPreviewRows(
     const { vk, gesamt } = vkAndGesamt(item, aufschlag);
 
     return {
-      Position: item.position,
       Artikel: formatArtikelCell(item, { layoutId }),
       Menge: menge,
       Einheit: formatEinheitCell(item.unit, item.description) || null,

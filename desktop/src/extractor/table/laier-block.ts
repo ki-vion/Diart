@@ -29,6 +29,11 @@ export function extractLaierArticleId(text: string): string | null {
   return m.groups.id ?? m.groups.rcode ?? null;
 }
 
+/** Surcharge row (e.g. R000008 *); billing may continue on the next page. */
+export function isLaierRCodeAnchorLine(text: string): boolean {
+  return /^R\d{6}\s*\*/i.test(text.trim());
+}
+
 /** Suffix on anchor line, e.g. "55501726 (Alternativposition)". */
 export function extractLaierAlternativTag(text: string): string | null {
   return LAIER_ALTERNATIV_TAG.test(text) ? "(Alternativposition)" : null;
@@ -76,8 +81,11 @@ function isLaierTotalLine(text: string): boolean {
  * (description and Alternativposition lines may sit in between).
  */
 export function isLaierItemAnchor(lines: PdfLine[], index: number): boolean {
-  const id = extractLaierArticleId(lines[index]?.text ?? "");
+  const head = lines[index]?.text.trim() ?? "";
+  const id = extractLaierArticleId(head);
   if (!id) return false;
+
+  if (isLaierRCodeAnchorLine(head)) return true;
 
   const afterArt = lines[index + 1]?.text.trim() ?? "";
   if (/artikelnummer|zolltarif|abmessung|produkt\s+zert/i.test(afterArt)) return false;

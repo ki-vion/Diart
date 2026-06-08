@@ -54,21 +54,21 @@ describe("buildExcelBuffer", () => {
     ).toEqual([...MATERIALLISTE_HEADERS]);
 
     const row2 = sheet.getRow(2);
-    expect(row2.getCell(1).value).toBe("1");
-    expect(row2.getCell(7).value).toBeNull();
-    expect(row2.getCell(8).value).toBe(10);
-    expect(row2.getCell(9).value).toBe(0.2);
-    expect(row2.getCell(5).formula).toBe("H2*(1+I2)");
-    expect(row2.getCell(6).formula).toBe("E2*C2");
+    expect(row2.getCell(1).value).toBe("A-1\nTest");
+    expect(row2.getCell(6).value).toBeNull();
+    expect(row2.getCell(7).value).toBe(10);
+    expect(row2.getCell(8).value).toBe(0.2);
+    expect(row2.getCell(4).formula).toBe("G2*(1+H2)");
+    expect(row2.getCell(5).formula).toBe("D2*B2");
 
     expect(sheet.getRow(1).getCell(1).font?.bold).toBe(true);
 
-    expect(sheet.getRow(5).getCell(5).value).toBe("Gesamt Netto");
-    expect(sheet.getRow(5).getCell(6).formula).toBe("SUM(F2:F2)");
-    expect(sheet.getRow(6).getCell(5).value).toBe("Mwst. 19%");
-    expect(sheet.getRow(6).getCell(6).formula).toBe("F5*0.19");
-    expect(sheet.getRow(7).getCell(5).value).toBe("Gesamtbetrag");
-    expect(sheet.getRow(7).getCell(6).formula).toBe("F5+F6");
+    expect(sheet.getRow(5).getCell(4).value).toBe("Gesamt Netto");
+    expect(sheet.getRow(5).getCell(5).formula).toBe("SUM(E2:E2)");
+    expect(sheet.getRow(6).getCell(4).value).toBe("Mwst. 19%");
+    expect(sheet.getRow(6).getCell(5).formula).toBe("E5*0.19");
+    expect(sheet.getRow(7).getCell(4).value).toBe("Gesamtbetrag");
+    expect(sheet.getRow(7).getCell(5).formula).toBe("E5+E6");
   });
 
   it("divides Gesamt by price_per when set", async () => {
@@ -93,7 +93,7 @@ describe("buildExcelBuffer", () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(await buildExcelBuffer(result, { aufschlag: 0 })));
     const row2 = wb.worksheets[0]!.getRow(2);
-    expect(row2.getCell(6).formula).toBe("E2*C2/100");
-    expect(row2.getCell(6).result).toBeCloseTo(445.5, 2);
+    expect(row2.getCell(5).formula).toBe("D2*B2/100");
+    expect(row2.getCell(5).result).toBeCloseTo(445.5, 2);
   });
 });

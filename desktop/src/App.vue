@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import {
   convertPdfFile,
   type ConvertResponse,
@@ -14,7 +14,6 @@ const error = ref("");
 const pdfInput = ref<HTMLInputElement | null>(null);
 
 const previewColumns = [
-  "Position",
   "Artikel",
   "Menge",
   "Einheit",
@@ -23,6 +22,20 @@ const previewColumns = [
   "Einzelpreis PDF (€)",
   "Aufschlag",
 ] as const;
+
+type PreviewSpacer = { kind: "spacer" };
+type PreviewTableEntry = PreviewRow | PreviewSpacer;
+
+const previewTableEntries = computed((): PreviewTableEntry[] => {
+  const preview = result.value?.preview;
+  if (!preview?.length) return [];
+  const out: PreviewTableEntry[] = [];
+  for (let i = 0; i < preview.length; i++) {
+    out.push(preview[i]!);
+    if (i < preview.length - 1) out.push({ kind: "spacer" });
+  }
+  return out;
+});
 
 const MONEY_COLUMNS = new Set<(typeof previewColumns)[number]>([
   "Einzelpreis (€)",
@@ -157,14 +170,23 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, idx) in result.preview" :key="idx">
-              <td
-                v-for="col in previewColumns"
-                :key="col"
-                :class="{ 'cell-multiline': col === 'Artikel' }"
-              >
-                {{ cell(row, col) }}
-              </td>
+            <tr
+              v-for="(entry, idx) in previewTableEntries"
+              :key="idx"
+              :class="{ 'preview-spacer-row': 'kind' in entry }"
+            >
+              <template v-if="'kind' in entry">
+                <td :colspan="previewColumns.length" class="preview-spacer-cell" />
+              </template>
+              <template v-else>
+                <td
+                  v-for="col in previewColumns"
+                  :key="col"
+                  :class="{ 'cell-multiline': col === 'Artikel' }"
+                >
+                  {{ cell(entry, col) }}
+                </td>
+              </template>
             </tr>
           </tbody>
         </table>
@@ -331,5 +353,13 @@ td.cell-multiline {
   white-space: pre-line;
   vertical-align: top;
   min-width: 14rem;
+}
+
+.preview-spacer-row .preview-spacer-cell {
+  height: 0.75rem;
+  padding: 0;
+  border-left: none;
+  border-right: none;
+  background: transparent;
 }
 </style>

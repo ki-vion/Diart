@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PdfStructured } from "../../pdf/types";
-import { RK_STARK_TEMPLATE } from "../pipeline/templates";
+import { LAIER_VAN_TEMPLATE, RK_STARK_TEMPLATE } from "../pipeline/templates";
 import { columnContextFromTemplate } from "./column-block";
 import { extractAnchoredItems } from "./anchor-extract";
 import { findTableRegionOrContinuation } from "./table-region";
@@ -108,5 +108,52 @@ describe("extractAnchoredItems (RK page slice)", () => {
     expect(item?.description).toContain("2508x1830");
     expect(item?.description).toContain("feuerverzinkt");
     expect(item?.line_total).toBe(1934.3);
+  });
+});
+
+describe("extractAnchoredItems (Laier R-code page span)", () => {
+  const yHeader = 262;
+  const laierHeader = [
+    textLine(yHeader, [w("Artikel", 42, yHeader)]),
+    textLine(yHeader, [w("Menge", 321, yHeader)]),
+    textLine(yHeader, [w("Einheit", 353, yHeader)]),
+    textLine(yHeader, [w("VK-Preis", 409, yHeader)]),
+    textLine(yHeader, [w("Betrag", 532, yHeader)]),
+  ];
+
+  it("merges R000008 anchor on page 1 with billing on page 2", () => {
+    const page0 = [
+      ...laierHeader,
+      textLine(400, [w("55510010", 42, 400)]),
+      textLine(412, [w("2", 344, 412), w("Stück", 353, 412), w("10,00", 416, 412), w("20,00", 532, 412)]),
+      textLine(715, [w("R000008 *", 42, 715)]),
+      textLine(798, [w("Rudolf Laier GmbH", 42, 798, 6)]),
+    ];
+    const page1 = [
+      textLine(143, [w("Rudolf Laier GmbH · Am Bild 1", 60, 143)]),
+      ...laierHeader,
+      textLine(274, [w("Maut", 42, 274)]),
+      textLine(274, [w("1", 344, 274), w("Stück", 353, 274), w("160,05", 416, 274), w("160,05", 532, 274)]),
+      textLine(400, [w("Total EUR ohne MwSt.", 42, 400)]),
+    ];
+
+    const structured: PdfStructured = {
+      pages: [
+        { index: 0, width: 595, height: 842, rawText: "", lines: page0 },
+        { index: 1, width: 595, height: 842, rawText: "", lines: page1 },
+      ],
+    };
+
+    const columnBlock = columnContextFromTemplate(LAIER_VAN_TEMPLATE, [structured.pages[0]!]);
+    const items = extractAnchoredItems(structured, {
+      layout_id: "Rudolf Laier GmbH",
+      columnBlock,
+    });
+
+    const maut = items.find((i) => i.article_number === "R000008");
+    expect(maut).toBeDefined();
+    expect(maut?.description).toContain("Maut");
+    expect(maut?.quantity).toBe(1);
+    expect(maut?.line_total).toBeCloseTo(160.05, 2);
   });
 });
