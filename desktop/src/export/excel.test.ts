@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import type { ExtractionResult } from "../extractor/models";
 import { buildExcelBuffer, MATERIALLISTE_HEADERS } from "./excel";
+import { EXCEL_EURO_NUMFMT, EXCEL_QUANTITY_NUMFMT } from "./format-money";
 
 describe("buildExcelBuffer", () => {
   it("returns a non-trivial xlsx buffer", async () => {
@@ -63,12 +64,21 @@ describe("buildExcelBuffer", () => {
 
     expect(sheet.getRow(1).getCell(1).font?.bold).toBe(true);
 
+    expect(sheet.getColumn(2).numFmt).toBe(EXCEL_QUANTITY_NUMFMT);
+    expect(sheet.getColumn(4).numFmt).toBe(EXCEL_EURO_NUMFMT);
+    expect(sheet.getColumn(5).numFmt).toBe(EXCEL_EURO_NUMFMT);
+    expect(sheet.getColumn(7).numFmt).toBe(EXCEL_EURO_NUMFMT);
+
     expect(sheet.getRow(5).getCell(4).value).toBe("Gesamt Netto");
-    expect(sheet.getRow(5).getCell(5).formula).toBe("SUM(E2:E2)");
+    expect(sheet.getRow(5).getCell(5).formula).toBe("ROUND(SUM(E2:E2),2)");
     expect(sheet.getRow(6).getCell(4).value).toBe("Mwst. 19%");
-    expect(sheet.getRow(6).getCell(5).formula).toBe("E5*0.19");
+    expect(sheet.getRow(6).getCell(5).formula).toBe("ROUND(E5*0.19,2)");
     expect(sheet.getRow(7).getCell(4).value).toBe("Gesamtbetrag");
-    expect(sheet.getRow(7).getCell(5).formula).toBe("E5+E6");
+    expect(sheet.getRow(7).getCell(5).formula).toBe("ROUND(E5+E6,2)");
+
+    expect(sheet.getRow(2).getCell(4).numFmt).toBe(EXCEL_EURO_NUMFMT);
+    expect(sheet.getRow(2).getCell(5).numFmt).toBe(EXCEL_EURO_NUMFMT);
+    expect(sheet.getRow(2).getCell(7).numFmt).toBe(EXCEL_EURO_NUMFMT);
   });
 
   it("divides Gesamt by price_per when set", async () => {

@@ -6,6 +6,7 @@ import {
   type PreviewRow,
 } from "./lib/convert";
 import { downloadBlob } from "./lib/download";
+import { formatEuroDe, formatQuantityDe } from "./export/format-money";
 
 const aufschlagPercent = ref(20);
 const loading = ref(false);
@@ -40,14 +41,8 @@ const previewTableEntries = computed((): PreviewTableEntry[] => {
 const MONEY_COLUMNS = new Set<(typeof previewColumns)[number]>([
   "Einzelpreis (€)",
   "Gesamt (€)",
+  "Einzelpreis PDF (€)",
 ]);
-
-function formatEuro(value: number): string {
-  return value.toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 function openFilePicker() {
   pdfInput.value?.click();
@@ -86,7 +81,10 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
   const v = row[col as keyof PreviewRow];
   if (v === null || v === undefined) return "";
   if (typeof v === "number" && MONEY_COLUMNS.has(col)) {
-    return formatEuro(v);
+    return formatEuroDe(v);
+  }
+  if (typeof v === "number" && col === "Menge") {
+    return formatQuantityDe(v);
   }
   return String(v);
 }
@@ -151,15 +149,15 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
       <dl v-if="result.previewTotals" class="preview-totals">
         <div class="preview-totals-row">
           <dt>Gesamt Netto</dt>
-          <dd>{{ formatEuro(result.previewTotals.netto) }} €</dd>
+          <dd>{{ formatEuroDe(result.previewTotals.netto) }} €</dd>
         </div>
         <div class="preview-totals-row">
           <dt>MwSt. 19 %</dt>
-          <dd>{{ formatEuro(result.previewTotals.mwst) }} €</dd>
+          <dd>{{ formatEuroDe(result.previewTotals.mwst) }} €</dd>
         </div>
         <div class="preview-totals-row preview-totals-row--brutto">
           <dt>Gesamt Brutto</dt>
-          <dd>{{ formatEuro(result.previewTotals.brutto) }} €</dd>
+          <dd>{{ formatEuroDe(result.previewTotals.brutto) }} €</dd>
         </div>
       </dl>
       <div class="table-wrap">

@@ -39,6 +39,14 @@ export function extractLaierAlternativTag(text: string): string | null {
   return LAIER_ALTERNATIV_TAG.test(text) ? "(Alternativposition)" : null;
 }
 
+function isStandaloneAlternativLine(text: string): boolean {
+  return text.trim() === "(Alternativposition)";
+}
+
+function descriptionHasAlternativTag(description: string): boolean {
+  return LAIER_ALTERNATIV_TAG.test(description);
+}
+
 export function parsePreisPerLine(text: string): { factor: number; label: string } | null {
   const m = PREIS_PER_LINE.exec(text.trim());
   if (!m?.[1]) return null;
@@ -187,6 +195,12 @@ function appendLaierDescription(
   if (/^²$|^³$/.test(lineText)) return;
 
   const desc = cells.description?.trim() ?? "";
+  if (
+    (isStandaloneAlternativLine(lineText) || isStandaloneAlternativLine(desc)) &&
+    descriptionHasAlternativTag(item.description)
+  ) {
+    return;
+  }
   if (!desc || isLaierSkipLine(desc) || isVkDiscountToken(desc)) return;
   if (extractLaierArticleId(desc)) return;
   if (/^[\d.,]+$/.test(desc)) return;
@@ -211,18 +225,30 @@ function mergeSplitDimensionLines(lines: string[]): string[] {
   return merged;
 }
 
+function dedupeAlternativDescriptionLines(lines: string[]): string[] {
+  let seenAlternativ = false;
+  return lines.filter((line) => {
+    if (!isStandaloneAlternativLine(line)) return true;
+    if (seenAlternativ) return false;
+    seenAlternativ = true;
+    return true;
+  });
+}
+
 function finalizeLaierItem(item: LineItem, preisPerLabels: string[] = []): void {
-  const lines = mergeSplitDimensionLines(
-    item.description
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(
-        (l) =>
-          l &&
-          !isVkDiscountToken(l) &&
-          !isLaierSkipLine(l) &&
-          !/^sonstiges\b/i.test(l),
-      ),
+  const lines = dedupeAlternativDescriptionLines(
+    mergeSplitDimensionLines(
+      item.description
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(
+          (l) =>
+            l &&
+            !isVkDiscountToken(l) &&
+            !isLaierSkipLine(l) &&
+            !/^sonstiges\b/i.test(l),
+        ),
+    ),
   );
 
   for (const label of preisPerLabels) {
@@ -304,7 +330,8 @@ export function parseLaierColumnBlock(
 
     if (hasBilling) {
       mergeLaierBillingFields(item, cells, text);
-      if (cells.description?.trim()) {
+      // Anchor line (i=0): article id and (Alternativposition) already taken from headText.
+      if (i > 0 && cells.description?.trim()) {
         appendLaierDescription(item, line, cells, ctx);
       }
     } else {
@@ -317,7 +344,9 @@ export function parseLaierColumnBlock(
           continue;
         }
       }
-      appendLaierDescription(item, line, cells, ctx);
+      if (i > 0) {
+        appendLaierDescription(item, line, cells, ctx);
+      }
     }
   }
 
@@ -416,6 +445,7 @@ export function parseLaierBlock(texts: string[]): LineItem | null {
     }
 
     if (!isLaierPriceLine(t) && !isLaierTotalLine(t) && !isVkDiscountToken(t)) {
+      if (isStandaloneAlternativLine(t) && descParts.some(isStandaloneAlternativLine)) continue;
       descParts.push(t);
     }
   }

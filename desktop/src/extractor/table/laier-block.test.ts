@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatArtikelCell } from "../../export/format-artikel";
 import type { PdfLine } from "../../pdf/types";
 import { calibrateColumnWindows, lineToCells } from "../pipeline/columns";
 import { LAIER_VAN_TEMPLATE } from "../pipeline/templates";
@@ -134,6 +135,34 @@ describe("parseLaierColumnBlock", () => {
     expect(item?.unit_price).toBe(11.85);
     expect(item?.line_total).toBe(675.45);
     expect(item?.description).toContain("Villerit");
+  });
+
+  it("does not duplicate (Alternativposition) from anchor line column split", () => {
+    const item = parseLaierColumnBlock(
+      [
+        wordLine(680, [
+          { t: "22508050", x: 42.52 },
+          { t: "(Alternativposition)", x: 60 },
+        ]),
+        wordLine(703, [{ t: "Sockeldämmplatte 035 160x1000x500mm", x: 42.52 }]),
+        wordLine(715, [{ t: "1", x: 326.99 }]),
+        wordLine(715, [{ t: "Bund", x: 353.49 }]),
+        wordLine(715, [{ t: "10,00", x: 420.95 }]),
+        wordLine(715, [{ t: "(10,00)", x: 536.8 }]),
+      ],
+      ctx,
+    );
+    expect(item?.description).toBe(
+      "(Alternativposition)\nSockeldämmplatte 035 160x1000x500mm",
+    );
+    expect(
+      formatArtikelCell(
+        { article_number: item!.article_number, description: item!.description },
+        { layoutId: "Rudolf Laier GmbH" },
+      ),
+    ).toBe(
+      "22508050 (Alternativposition)\nSockeldämmplatte 035 160x1000x500mm",
+    );
   });
 
   it("keeps (Alternativposition) from anchor line in Artikel export", () => {
