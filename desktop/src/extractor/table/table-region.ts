@@ -108,7 +108,8 @@ export function findTableEndIndex(
     }
 
     if (isHardTableEndLine(text)) {
-      return i;
+      if (sawAnchor) return i;
+      continue;
     }
 
     if (isNonItemLine(line, pageHeight)) {
@@ -203,17 +204,33 @@ function pickHeaderBlock(lines: PdfLine[], blocks: HeaderBlock[]): HeaderBlock |
   return blocks.reduce((a, b) => (b.score > a.score ? b : a));
 }
 
+function headerTextSlice(lines: PdfLine[], region: TableRegion): string {
+  if (region.headerStart < 0) return "";
+  return lines
+    .slice(region.headerStart, region.headerEnd + 1)
+    .map((l) => l.text)
+    .join(" ");
+}
+
+/** RK/STARK invoices use POS. + ARTIKEL-NR. — not Laier orphan continuations. */
+function isRkStyleTableHeader(region: TableRegion, lines: PdfLine[]): boolean {
+  const header = headerTextSlice(lines, region);
+  return /\bPOS\./i.test(header) || /ARTIKEL-NR/i.test(header);
+}
+
+/** Laier VAN quotes: Artikel + Betrag header without RK position column. */
+function isLaierStyleTableHeader(region: TableRegion, lines: PdfLine[]): boolean {
+  const header = headerTextSlice(lines, region).toLowerCase();
+  return /\bartikel\b/.test(header) && /\bbetrag\b/.test(header);
+}
+
 /** Laier: billing for an R-code anchor on the prior page (header repeats, no new anchor). */
 function isLaierOrphanContinuation(
   lines: PdfLine[],
   region: TableRegion,
 ): boolean {
-  const hasLaierHeader =
-    region.columnMap.article !== undefined &&
-    (region.columnMap.quantity !== undefined ||
-      region.columnMap.unit !== undefined ||
-      region.columnMap.unitPrice !== undefined);
-  if (!hasLaierHeader) return false;
+  if (isRkStyleTableHeader(region, lines)) return false;
+  if (!isLaierStyleTableHeader(region, lines)) return false;
 
   const anchors = findBlockAnchors(lines, region.dataStartIndex).filter(
     (a) => a.lineIndex < region.dataEndIndex,

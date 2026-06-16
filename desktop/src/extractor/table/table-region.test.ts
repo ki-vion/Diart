@@ -45,6 +45,19 @@ describe("findTableEndIndex", () => {
     expect(end).toBe(lines.length);
   });
 
+  it("skips separator lines before the first position anchor", () => {
+    const lines: PdfLine[] = [
+      line(180, [{ text: "POS.", x: 42 }, { text: "ARTIKEL-NR.", x: 76 }]),
+      line(193, [{ text: "ARTIKELBEZEICHNUNG", x: 76 }, { text: "IN EUR", x: 120 }]),
+      line(199, [{ text: "_______________________________", x: 265 }]),
+      line(215, [{ text: "00010", x: 42 }, { text: "581558", x: 76 }]),
+      line(230, [{ text: "Produkt", x: 76 }]),
+      line(300, [{ text: "Brutto-Warenbetrag: 847,36", x: 230 }]),
+    ];
+    const end = findTableEndIndex({ lines, height: 842 }, 2, [], {});
+    expect(end).toBe(5);
+  });
+
   it("stops before post-table summary lines", () => {
     const lines: PdfLine[] = [
       line(200, [{ text: "00040", x: 42 }, { text: "1040847", x: 100 }]),
