@@ -141,10 +141,10 @@ export function calibrateColumnWindows(
   return windows;
 }
 
-/** VK discount suffix (e.g. „--4 %“) — not part of Artikel/Beschreibung. */
+/** VK discount suffix (e.g. „--4 %“, Rechnung „-3 %“) — not part of Artikel/Beschreibung. */
 export function isVkDiscountToken(text: string): boolean {
   const t = text.trim();
-  return t === "%" || /^--\s*\d+/.test(t);
+  return t === "%" || /^-{1,2}\s*\d+/.test(t);
 }
 
 function wordRightX(w: PdfWord): number {

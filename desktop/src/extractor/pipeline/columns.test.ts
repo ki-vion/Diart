@@ -16,6 +16,7 @@ function line(text: string, wordSpecs: { t: string; x: number }[]): PdfLine {
 describe("isVkDiscountToken", () => {
   it("detects discount suffix tokens", () => {
     expect(isVkDiscountToken("--4")).toBe(true);
+    expect(isVkDiscountToken("-3 %")).toBe(true);
     expect(isVkDiscountToken("%")).toBe(true);
     expect(isVkDiscountToken("40,50")).toBe(false);
   });

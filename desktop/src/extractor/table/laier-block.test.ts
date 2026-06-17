@@ -188,6 +188,36 @@ describe("parseLaierColumnBlock", () => {
     expect(item?.description).toContain("(Alternativposition)");
   });
 
+  it("parses Rechnung row with single-dash discount and split m²", () => {
+    const item = parseLaierColumnBlock(
+      [
+        wordLine(515, [{ t: "22860077", x: 44.53 }]),
+        wordLine(527, [
+          { t: "Enertherm ALU PURE Kellerdecken", x: 44.53 },
+          { t: "1200x", x: 180 },
+          { t: "600x", x: 210 },
+          { t: "80mm", x: 240 },
+        ]),
+        wordLine(527, [{ t: "²", x: 76 }]),
+        wordLine(527, [{ t: "43,20000", x: 313.95 }]),
+        wordLine(527, [{ t: "m", x: 355.5 }]),
+        wordLine(527, [{ t: "19,30", x: 422.96 }]),
+        wordLine(527, [{ t: "-3", x: 448.45 }, { t: "%", x: 458.95 }]),
+        wordLine(527, [{ t: "808,75", x: 534.85 }]),
+        wordLine(538, [{ t: "ALU / 023 / TG = Nut & Feder", x: 44.53 }]),
+        wordLine(551, [{ t: "1 Pal. (à 10 Bund)", x: 44.53 }]),
+      ],
+      ctx,
+    );
+    expect(item?.article_number).toBe("22860077");
+    expect(item?.quantity).toBeCloseTo(43.2, 2);
+    expect(item?.unit).toBe("m²");
+    expect(item?.unit_price).toBeCloseTo(19.3, 2);
+    expect(item?.line_total).toBeCloseTo(808.75, 2);
+    expect(item?.description).toContain("Enertherm");
+    expect(item?.description).not.toMatch(/-3\s*%/);
+  });
+
   it("parses VWS-Gewebe with split m² packaging and Preis per 100", () => {
     const item = parseLaierColumnBlock(
       [
@@ -282,6 +312,21 @@ describe("parseLaierBlock", () => {
     ]);
     expect(item?.quantity).toBe(57);
     expect(item?.unit).toBe("Sack");
+  });
+
+  it("parses Rechnung text with single-dash VK discount", () => {
+    const item = parseLaierBlock([
+      "22860077",
+      "Enertherm ALU PURE Kellerdecken  1200x 600x 80mm",
+      "43,20000 m²",
+      "19,30 -3 %",
+      "808,75",
+      "1 Pal. (à 10 Bund)",
+    ]);
+    expect(item?.quantity).toBeCloseTo(43.2, 2);
+    expect(item?.unit).toBe("m²");
+    expect(item?.unit_price).toBeCloseTo(19.3, 2);
+    expect(item?.line_total).toBeCloseTo(808.75, 2);
   });
 
   it("parses compact rows without parentheses total", () => {

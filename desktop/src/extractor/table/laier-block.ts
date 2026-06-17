@@ -13,7 +13,7 @@ import {
 export const LAIER_ARTICLE_HEAD = /^(?<id>\d{8})\b|^(?<rcode>R\d{6})\s*\*/;
 
 const QTY_UNIT_LINE = /^(?<qty>[\d.,]+)\s+(?<unit>.+)$/i;
-const PRICE_LINE = /^(?<price>[\d.,]+)(?:\s+--\s*\d+\s*%)?$/;
+const PRICE_LINE = /^(?<price>[\d.,]+)(?:\s+-{1,2}\s*\d+\s*%)?$/;
 const TOTAL_PARENS = /^\((?<total>[\d.,]+)\)$/;
 
 const SKIP_LINE = /^(artikel$|menge\s+einheit|vk-preis|betrag$|sonstiges)/i;
@@ -78,10 +78,20 @@ function isLaierPriceLine(text: string): boolean {
   return PRICE_LINE.test(text.trim());
 }
 
+function lineHasVkDiscount(text: string): boolean {
+  return /-{1,2}\s*\d+\s*%/.test(text.trim());
+}
+
+function hasSquareMeterSuperscriptOnSameY(lines: PdfLine[], y: number): boolean {
+  return lines.some(
+    (l) => Math.abs(l.y - y) < 0.5 && /^²\)?$/.test(l.text.trim()),
+  );
+}
+
 function isLaierTotalLine(text: string): boolean {
   const t = text.trim();
   if (TOTAL_PARENS.test(t)) return true;
-  return isLaierPriceLine(t) && !t.includes("--");
+  return isLaierPriceLine(t) && !lineHasVkDiscount(t);
 }
 
 /**
@@ -157,7 +167,7 @@ function mergeLaierBillingFields(
     if (m?.groups) item.line_total = parseDeNumber(m.groups.total ?? "");
   }
 
-  if (item.unit_price === null && PRICE_LINE.test(lineText.trim()) && lineText.includes("--")) {
+  if (item.unit_price === null && PRICE_LINE.test(lineText.trim()) && lineHasVkDiscount(lineText)) {
     const m = PRICE_LINE.exec(lineText.trim());
     if (m?.groups) item.unit_price = parseDeNumber(m.groups.price ?? "");
   }
@@ -262,6 +272,42 @@ function finalizeLaierItem(item: LineItem, preisPerLabels: string[] = []): void 
   }
 }
 
+function laierPriceBandMinX(ctx: ColumnBlockContext): number {
+  const unit = ctx.windows.find((w) => w.role === "unit");
+  const qty = ctx.windows.find((w) => w.role === "quantity");
+  return (unit?.xMax ?? qty?.xMax ?? 370) - 8;
+}
+
+/** VK + Betrag on one MuPDF row: x-order (calibrated bands may squeeze VK-Preis). */
+function reconcileLaierRowPrices(
+  item: LineItem,
+  lines: PdfLine[],
+  ctx: ColumnBlockContext,
+): void {
+  const priceMinX = laierPriceBandMinX(ctx);
+  const byY = new Map<number, Array<{ x: number; n: number }>>();
+
+  for (const line of lines) {
+    const t = line.text.trim();
+    if (!/^[\d.,]+$/.test(t)) continue;
+    const n = parseDeNumber(t);
+    if (n === null) continue;
+    const x = line.words[0]?.x ?? 0;
+    if (x < priceMinX) continue;
+    const yKey = Math.round(line.y);
+    const row = byY.get(yKey) ?? [];
+    row.push({ x, n });
+    byY.set(yKey, row);
+  }
+
+  for (const row of byY.values()) {
+    if (row.length < 2) continue;
+    row.sort((a, b) => a.x - b.x);
+    item.unit_price ??= row[0]!.n;
+    item.line_total = row[row.length - 1]!.n;
+  }
+}
+
 /** Billing fields from calibrated X columns (Menge / Einheit / VK-Preis / Betrag). */
 export function parseLaierColumnBlock(
   lines: PdfLine[],
@@ -294,6 +340,7 @@ export function parseLaierColumnBlock(
     if (!text) continue;
     if (isBlockTerminatorLine(text)) break;
     if (i > 0 && extractLaierArticleId(text)) break;
+    if (text === "²") continue;
 
     const preisPer = parsePreisPerLine(text);
     if (preisPer) {
@@ -311,7 +358,11 @@ export function parseLaierColumnBlock(
       const unit = cells.unit?.trim() ?? "";
       if (unit && LAIER_BILLING_UNIT_FALLBACK.test(unit)) {
         item.quantity ??= pendingQtyOnly;
-        item.unit ??= unit;
+        if (unit === "m" && hasSquareMeterSuperscriptOnSameY(lines, line.y)) {
+          item.unit = "m²";
+        } else {
+          item.unit ??= unit;
+        }
         pendingQtyOnly = null;
         continue;
       }
@@ -330,6 +381,9 @@ export function parseLaierColumnBlock(
 
     if (hasBilling) {
       mergeLaierBillingFields(item, cells, text);
+      if (item.unit === "m" && hasSquareMeterSuperscriptOnSameY(lines, line.y)) {
+        item.unit = "m²";
+      }
       // Anchor line (i=0): article id and (Alternativposition) already taken from headText.
       if (i > 0 && cells.description?.trim()) {
         appendLaierDescription(item, line, cells, ctx);
@@ -354,6 +408,7 @@ export function parseLaierColumnBlock(
     return null;
   }
 
+  reconcileLaierRowPrices(item, lines, ctx);
   finalizeLaierItem(item, preisPerLabels);
   return item;
 }
@@ -391,7 +446,7 @@ export function parseLaierBlock(texts: string[]): LineItem | null {
     if (mergeSuperscriptOntoLastLine(descParts, t)) continue;
     if (/^²$|^³$/.test(t)) continue;
 
-    const qtyMatch = !t.includes("--") ? QTY_UNIT_LINE.exec(t) : null;
+    const qtyMatch = !lineHasVkDiscount(t) ? QTY_UNIT_LINE.exec(t) : null;
     if (qtyMatch?.groups) {
       const unitPart = qtyMatch.groups.unit?.trim() ?? "";
       if (unitPart && !/^--/.test(unitPart)) {
@@ -435,7 +490,7 @@ export function parseLaierBlock(texts: string[]): LineItem | null {
     if (priceMatch?.groups) {
       const n = parseDeNumber(priceMatch.groups.price ?? "");
       if (n !== null) {
-        if (t.includes("--") && unit_price === null) {
+        if (lineHasVkDiscount(t) && unit_price === null) {
           unit_price = n;
         } else {
           barePrices.push(n);

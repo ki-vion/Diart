@@ -157,3 +157,53 @@ describe("extractAnchoredItems (Laier R-code page span)", () => {
     expect(maut?.line_total).toBeCloseTo(160.05, 2);
   });
 });
+
+describe("extractAnchoredItems (Laier Rechnung VRG336895 billing)", () => {
+  const yHeader = 383;
+  const laierHeader = [
+    textLine(yHeader, [w("Artikel", 44.53, yHeader)]),
+    textLine(yHeader, [w("Menge", 322.95, yHeader)]),
+    textLine(yHeader, [w("Einheit", 355.5, yHeader)]),
+    textLine(yHeader, [w("VK-Preis", 410.94, yHeader)]),
+    textLine(yHeader, [w("Betrag", 533.84, yHeader)]),
+  ];
+
+  it("extracts VK-Preis and Betrag when discount is on a separate MuPDF line", () => {
+    const yBill = 527;
+    const page0 = [
+      ...laierHeader,
+      textLine(515, [w("22860077", 44.53, 515)]),
+      textLine(yBill, [
+        w("Enertherm ALU PURE Kellerdecken", 44.53, yBill),
+        w("1200x", 180, yBill),
+        w("600x", 210, yBill),
+        w("80mm", 240, yBill),
+      ]),
+      textLine(yBill, [w("²", 76, yBill)]),
+      textLine(yBill, [w("43,20000", 313.95, yBill)]),
+      textLine(yBill, [w("m", 355.5, yBill)]),
+      textLine(yBill, [w("19,30", 422.96, yBill)]),
+      textLine(yBill, [w("-3", 448.45, yBill), w("%", 458.95, yBill)]),
+      textLine(yBill, [w("808,75", 534.85, yBill)]),
+      textLine(538, [w("ALU / 023 / TG = Nut & Feder", 44.53, 538)]),
+      textLine(551, [w("1 Pal. (à 10 Bund)", 44.53, 551)]),
+      textLine(574, [w("55211505", 44.53, 574)]),
+    ];
+
+    const structured: PdfStructured = {
+      pages: [{ index: 0, width: 595, height: 842, rawText: "", lines: page0 }],
+    };
+
+    const columnBlock = columnContextFromTemplate(LAIER_VAN_TEMPLATE, structured.pages);
+    const items = extractAnchoredItems(structured, {
+      layout_id: "Rudolf Laier GmbH",
+      columnBlock,
+    });
+
+    const item = items.find((i) => i.article_number === "22860077");
+    expect(item?.quantity).toBeCloseTo(43.2, 2);
+    expect(item?.unit).toBe("m²");
+    expect(item?.unit_price).toBeCloseTo(19.3, 2);
+    expect(item?.line_total).toBeCloseTo(808.75, 2);
+  });
+});

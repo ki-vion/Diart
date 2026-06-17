@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import type { ExtractionResult } from "../extractor/models";
 import { buildExcelBuffer, MATERIALLISTE_HEADERS } from "./excel";
-import { EXCEL_EURO_NUMFMT, EXCEL_QUANTITY_NUMFMT } from "./format-money";
+import { EXCEL_EURO_NUMFMT, EXCEL_QUANTITY_INTEGER_NUMFMT, EXCEL_QUANTITY_NUMFMT } from "./format-money";
 
 describe("buildExcelBuffer", () => {
   it("returns a non-trivial xlsx buffer", async () => {
@@ -64,7 +64,7 @@ describe("buildExcelBuffer", () => {
 
     expect(sheet.getRow(1).getCell(1).font?.bold).toBe(true);
 
-    expect(sheet.getColumn(2).numFmt).toBe(EXCEL_QUANTITY_NUMFMT);
+    expect(sheet.getColumn(2).numFmt).toBe(EXCEL_QUANTITY_INTEGER_NUMFMT);
     expect(sheet.getColumn(4).numFmt).toBe(EXCEL_EURO_NUMFMT);
     expect(sheet.getColumn(5).numFmt).toBe(EXCEL_EURO_NUMFMT);
     expect(sheet.getColumn(7).numFmt).toBe(EXCEL_EURO_NUMFMT);
@@ -76,6 +76,7 @@ describe("buildExcelBuffer", () => {
     expect(sheet.getRow(7).getCell(4).value).toBe("Gesamtbetrag");
     expect(sheet.getRow(7).getCell(5).formula).toBe("ROUND(E5+E6,2)");
 
+    expect(sheet.getRow(2).getCell(2).numFmt).toBe(EXCEL_QUANTITY_INTEGER_NUMFMT);
     expect(sheet.getRow(2).getCell(4).numFmt).toBe(EXCEL_EURO_NUMFMT);
     expect(sheet.getRow(2).getCell(5).numFmt).toBe(EXCEL_EURO_NUMFMT);
     expect(sheet.getRow(2).getCell(7).numFmt).toBe(EXCEL_EURO_NUMFMT);
@@ -105,5 +106,40 @@ describe("buildExcelBuffer", () => {
     const row2 = wb.worksheets[0]!.getRow(2);
     expect(row2.getCell(5).formula).toBe("D2*B2/100");
     expect(row2.getCell(5).result).toBeCloseTo(445.5, 2);
+  });
+
+  it("uses integer quantity format for whole numbers (no trailing comma in de-DE Excel)", async () => {
+    const result: ExtractionResult = {
+      layout_id: "test",
+      source_pdf: "test.pdf",
+      items: [
+        {
+          position: "1",
+          article_number: "A-1",
+          artikel_prefix: null,
+          description: "Ganzzahl",
+          quantity: 43,
+          unit: "m²",
+          unit_price: 10,
+          line_total: 430,
+        },
+        {
+          position: "2",
+          article_number: "A-2",
+          artikel_prefix: null,
+          description: "Dezimal",
+          quantity: 2.6,
+          unit: "Stk",
+          unit_price: 5,
+          line_total: 13,
+        },
+      ],
+    };
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(await buildExcelBuffer(result, { aufschlag: 0 })));
+    const sheet = wb.worksheets[0]!;
+    expect(sheet.getRow(2).getCell(2).numFmt).toBe(EXCEL_QUANTITY_INTEGER_NUMFMT);
+    expect(sheet.getRow(4).getCell(2).numFmt).toBe(EXCEL_QUANTITY_NUMFMT);
   });
 });

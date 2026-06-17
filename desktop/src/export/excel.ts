@@ -1,7 +1,11 @@
 import ExcelJS from "exceljs";
 import type { ExtractionResult } from "../extractor/models";
 import { formatArtikelCell, formatEinheitCell } from "./format-artikel";
-import { EXCEL_EURO_NUMFMT, EXCEL_QUANTITY_NUMFMT } from "./format-money";
+import {
+  EXCEL_EURO_NUMFMT,
+  EXCEL_QUANTITY_INTEGER_NUMFMT,
+  excelQuantityNumFmt,
+} from "./format-money";
 
 export type BuildExcelOptions = {
   /**
@@ -32,7 +36,10 @@ function boldRow(row: ExcelJS.Row): void {
 }
 
 function applyDataRowFormats(row: ExcelJS.Row): void {
-  row.getCell(2).numFmt = EXCEL_QUANTITY_NUMFMT;
+  const qtyCell = row.getCell(2);
+  if (typeof qtyCell.value === "number") {
+    qtyCell.numFmt = excelQuantityNumFmt(qtyCell.value);
+  }
   row.getCell(4).numFmt = EXCEL_EURO_NUMFMT;
   row.getCell(5).numFmt = EXCEL_EURO_NUMFMT;
   row.getCell(7).numFmt = EXCEL_EURO_NUMFMT;
@@ -102,7 +109,7 @@ export async function buildExcelBuffer(
   artikelCol.width = 48;
   artikelCol.alignment = { wrapText: true, vertical: "top" };
 
-  sheet.getColumn(2).numFmt = EXCEL_QUANTITY_NUMFMT;
+  sheet.getColumn(2).numFmt = EXCEL_QUANTITY_INTEGER_NUMFMT;
   sheet.getColumn(4).numFmt = EXCEL_EURO_NUMFMT;
   sheet.getColumn(5).numFmt = EXCEL_EURO_NUMFMT;
   sheet.getColumn(7).numFmt = EXCEL_EURO_NUMFMT;
