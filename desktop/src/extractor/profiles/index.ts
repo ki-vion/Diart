@@ -8,6 +8,7 @@ import { extractFromLines as extractLaierFromLines } from "../strategies/laier_v
 import { extractTableItems } from "../table/extract-table";
 import { allAsTextLines } from "./lines";
 import { detectProfile } from "./detect-profile";
+import { extractMahler } from "./extract-mahler";
 import { extractNorit } from "./extract-norit";
 import { extractRkStark } from "./extract-rk";
 import { assignSequentialPositions } from "../assign-positions";
@@ -51,6 +52,8 @@ export function extractByProfile(
         items: assignSequentialPositions(fallback.items),
       };
     }
+    case "Bauwaren Mahler":
+      return extractMahler(structured, source_pdf);
     case "generic":
       return extractTableItems(structured, source_pdf);
   }

@@ -43,11 +43,18 @@ export function explorePipelineInfo(profile: PdfProfile): ExplorePipelineInfo {
         anchorSource: "findBlockAnchors (laier) within table data region",
         usesXColumnCells: false,
       };
+    case "Bauwaren Mahler":
+      return {
+        profile,
+        extractionSource: "findTableRegion → Mahler position anchors (N,N) → multi-line blocks",
+        anchorSource: "comma position in first column + article number in next lines",
+        usesXColumnCells: true,
+      };
     default:
       return {
         profile,
-        extractionSource: "extractTableItems (generic)",
-        anchorSource: "findBlockAnchors within table data region",
+        extractionSource: "findTableRegion → generic position anchors → multi/single-line rows",
+        anchorSource: "1–8 digit position in first column after header row",
         usesXColumnCells: false,
       };
   }

@@ -23,6 +23,9 @@ export function detectProfile(structured: PdfStructured): PdfProfile {
   if (page0.includes("Rudolf Laier GmbH") || page0.includes("@laier.biz")) {
     return "Rudolf Laier GmbH";
   }
+  if (page0.includes("Bauwaren Mahler") || page0.includes("www.mahler.de")) {
+    return "Bauwaren Mahler";
+  }
 
   return "generic";
 }

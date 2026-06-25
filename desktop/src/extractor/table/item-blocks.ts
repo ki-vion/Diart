@@ -28,7 +28,7 @@ import {
   NORIT_POS,
   parseNoritBlock,
 } from "./norit-block.ts";
-import { HEADER_HINTS, type ColumnRole, type TableColumnMap } from "./header-map";
+import { cellMatchesHeaderHint, HEADER_HINTS, type TableColumnMap } from "./header-map";
 
 const RK_HEAD = /^(?<pos>\d{5})\s*(?<art>\d{6,})\b/;
 const RK_HEAD_LINE = /^\d{5}\s*\d{6,}\b/;
@@ -48,7 +48,7 @@ const EUR_PER = /EUR\s*\/\s*1/i;
 const SKIP_LINE =
   /^(<b>|pos\.|übertrag|seite\s+\d|angbot|kunden|in eur$|abw\.|zolltarif|produkt|coc-|länge:|breite:|charge:|vpe:|abmessung:|artikelnummer:|bestell)/i;
 
-export type BlockAnchorKind = "rk" | "kan" | "norit" | "laier";
+export type BlockAnchorKind = "rk" | "kan" | "norit" | "laier" | "generic" | "mahler";
 
 export type BlockAnchor = {
   lineIndex: number;
@@ -56,20 +56,9 @@ export type BlockAnchor = {
 };
 
 export function scoreHeaderLine(text: string): number {
-  const norm = text
-    .toLowerCase()
-    .replace(/\./g, " ")
-    .replace(/[-–]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
   let score = 0;
   for (const hints of Object.values(HEADER_HINTS)) {
-    for (const h of hints) {
-      const token = h.replace(/\./g, "").trim();
-      if (!token) continue;
-      const re = new RegExp(`(?:^|\\s)${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`, "i");
-      if (re.test(norm)) score += 1;
-    }
+    if (hints.some((h) => cellMatchesHeaderHint(text, h))) score += 1;
   }
   return score;
 }

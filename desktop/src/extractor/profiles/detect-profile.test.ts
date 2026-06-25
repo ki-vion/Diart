@@ -16,6 +16,9 @@ describe("detectProfile", () => {
     expect(detectProfile(structured("Rudolf Laier GmbH\nVAN029183"))).toBe(
       "Rudolf Laier GmbH",
     );
+    expect(detectProfile(structured("Bauwaren Mahler GmbH\nwww.mahler.de"))).toBe(
+      "Bauwaren Mahler",
+    );
     expect(detectProfile(structured("unknown"))).toBe("generic");
   });
 });

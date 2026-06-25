@@ -1,10 +1,13 @@
 import type { PdfLine, PdfPageStructured } from "../../pdf/types";
+import type { PdfProfile } from "../profiles/types";
+import { findGenericPositionAnchors } from "./generic-anchors";
+import { findMahlerPositionAnchors } from "./mahler-anchors";
 import {
   findBlockAnchors,
   type BlockAnchor,
   type BlockAnchorKind,
 } from "./item-blocks";
-import { findTableRegionOrContinuation, type TableRegion } from "./table-region";
+import { findTableRegion, findTableRegionOrContinuation, type TableRegion } from "./table-region";
 import { isNonItemLine } from "./table-zone";
 
 export type PageTableMeta = {
@@ -13,9 +16,42 @@ export type PageTableMeta = {
   anchorByLineIndex: Map<number, BlockAnchorKind>;
 };
 
+export type PageTableMetaOptions = {
+  profile?: PdfProfile;
+};
+
 export function getPageTableMeta(
   page: Pick<PdfPageStructured, "lines" | "height">,
+  options?: PageTableMetaOptions,
 ): PageTableMeta {
+  if (options?.profile === "generic") {
+    const region = findTableRegion(page);
+    if (!region) {
+      return { region: null, anchors: [], anchorByLineIndex: new Map() };
+    }
+    const anchorIndices = findGenericPositionAnchors(page.lines, region);
+    const anchors: BlockAnchor[] = anchorIndices.map((lineIndex) => ({
+      lineIndex,
+      kind: "generic",
+    }));
+    const anchorByLineIndex = new Map(anchors.map((a) => [a.lineIndex, a.kind]));
+    return { region, anchors, anchorByLineIndex };
+  }
+
+  if (options?.profile === "Bauwaren Mahler") {
+    const region = findTableRegion(page);
+    if (!region) {
+      return { region: null, anchors: [], anchorByLineIndex: new Map() };
+    }
+    const anchorIndices = findMahlerPositionAnchors(page.lines, region);
+    const anchors: BlockAnchor[] = anchorIndices.map((lineIndex) => ({
+      lineIndex,
+      kind: "mahler",
+    }));
+    const anchorByLineIndex = new Map(anchors.map((a) => [a.lineIndex, a.kind]));
+    return { region, anchors, anchorByLineIndex };
+  }
+
   const region = findTableRegionOrContinuation(page);
   if (!region) {
     return { region: null, anchors: [], anchorByLineIndex: new Map() };

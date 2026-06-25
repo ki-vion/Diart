@@ -4,7 +4,8 @@ import {
   inferColumnBoundaries,
   type WordToken,
 } from "./cluster-columns";
-import { HEADER_HINTS, type ColumnRole, type TableColumnMap } from "./header-map";
+import { mapColumnsFromHeaderCells, type ColumnRole, type TableColumnMap } from "./header-map";
+import { findGenericPositionAnchors, isGenericPositionAnchor } from "./generic-anchors";
 import { findBlockAnchors, scoreHeaderLine } from "./item-blocks";
 import { isHardTableEndLine } from "./line-guards";
 import { isNonItemLine, isPageImprintLine, isPostTableText } from "./table-zone";
@@ -31,18 +32,7 @@ const CORE_ROLES: ColumnRole[] = [
 ];
 
 function mapColumnsFromCells(cells: string[]): TableColumnMap {
-  const map: TableColumnMap = {};
-  cells.forEach((cell, idx) => {
-    const norm = cell.toLowerCase().replace(/\./g, "").replace(/\s+/g, "");
-    if (!norm) return;
-    for (const role of CORE_ROLES) {
-      const hints = HEADER_HINTS[role];
-      if (hints.some((h) => norm.includes(h.replace(/\./g, "")))) {
-        if (map[role] === undefined) map[role] = idx;
-      }
-    }
-  });
-  return map;
+  return mapColumnsFromHeaderCells(cells);
 }
 
 /** Table detected without requiring a Betrag/line-total column. */
@@ -127,6 +117,12 @@ export function findTableEndIndex(
 
 type HeaderBlock = { start: number; end: number; score: number };
 
+const SAME_Y_TOL = 1.5;
+
+function roughlySameY(a: PdfLine, b: PdfLine): boolean {
+  return Math.abs(a.y - b.y) <= SAME_Y_TOL;
+}
+
 /** Contiguous header row clusters (POS./MENGE/…); footer imprint also matches hints and must be ignored. */
 function findHeaderBlocks(
   lines: PdfLine[],
@@ -168,6 +164,12 @@ function findHeaderBlocks(
         break;
       }
       const nextScore = scoreHeaderLine(next);
+      if (roughlySameY(lines[start]!, nextLine)) {
+        end = i;
+        blockScore += Math.max(nextScore, 1);
+        i += 1;
+        continue;
+      }
       if (nextScore > 0 || /^(in\s+eur|me|pe)$/i.test(next)) {
         end = i;
         blockScore += nextScore;
@@ -190,11 +192,24 @@ function pickHeaderBlock(lines: PdfLine[], blocks: HeaderBlock[]): HeaderBlock |
   let bestAnchors = -1;
 
   for (const block of blocks) {
-    const anchors = findBlockAnchors(lines, block.end + 1).filter(
+    const vendorAnchors = findBlockAnchors(lines, block.end + 1).filter(
       (a) => a.lineIndex <= block.end + 30,
     );
-    if (anchors.length > bestAnchors) {
-      bestAnchors = anchors.length;
+    const tentativeEnd = Math.min(block.end + 40, lines.length);
+    const tentativeRegion = {
+      headerStart: block.start,
+      headerEnd: block.end,
+      dataStartIndex: block.end + 1,
+      dataEndIndex: tentativeEnd,
+      boundaries: [] as number[],
+      columnMap: {},
+    };
+    const genericAnchors = findGenericPositionAnchors(lines, tentativeRegion).filter(
+      (i) => i <= block.end + 30,
+    );
+    const anchorCount = Math.max(vendorAnchors.length, genericAnchors.length);
+    if (anchorCount > bestAnchors) {
+      bestAnchors = anchorCount;
       best = block;
     }
   }
@@ -303,6 +318,19 @@ export function findTableRegion(page: {
       continue;
     }
     if (findBlockAnchors(lines, headerEnd + 1).some((a) => a.lineIndex === headerEnd + 1)) {
+      break;
+    }
+    const nextLine = lines[headerEnd + 1]!;
+    if (
+      isGenericPositionAnchor(nextLine, {
+        boundaries: inferColumnBoundaries(
+          lines
+            .slice(headerStart, headerEnd + 1)
+            .flatMap((l) => l.words.map((w) => ({ text: w.text, x: w.x }))),
+        ),
+        columnMap: {},
+      })
+    ) {
       break;
     }
     if (scoreHeaderLine(next) > 0 || /^(in\s+eur|me|pe)$/i.test(next)) {

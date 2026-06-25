@@ -48,7 +48,7 @@ describe("extractTableItems", () => {
     };
 
     const result = extractTableItems(structured, "test.pdf");
-    expect(result.layout_id).toBe("table_geometry");
+    expect(result.layout_id).toBe("unbekannt");
     expect(result.items.length).toBeGreaterThanOrEqual(2);
     expect(result.items[0]?.position).toBe("001");
     expect(result.items[0]?.quantity).toBe(2);

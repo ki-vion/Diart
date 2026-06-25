@@ -77,3 +77,30 @@ export const LAIER_VAN_TEMPLATE: TableTemplate = {
   skipLine: /^(<b>|alternativposition|menge einheit|vk-preis|betrag$|sonstiges)/i,
   minY: 250,
 };
+
+/** Bauwaren Mahler Angebot — Pos.-Spalte mit Komma (1,0), Art.-Nr. in eigener Spalte */
+export const MAHLER_TEMPLATE: TableTemplate = {
+  layout_id: "Bauwaren Mahler",
+  anchorRole: "position",
+  anchorPattern: /^\d{1,3},\d+$/,
+  headerHints: {
+    position: ["pos"],
+    article: ["art.-nr", "artikelnummer"],
+    description: ["bezeichnung"],
+    quantity: ["menge"],
+    unitPrice: ["einzelpreis"],
+    lineTotal: ["gesamtpreis", "gesamt"],
+  },
+  defaultWindows: [
+    { role: "position", xMin: 0, xMax: 95 },
+    { role: "article", xMin: 95, xMax: 135 },
+    { role: "description", xMin: 130, xMax: 385 },
+    { role: "quantity", xMin: 350, xMax: 430 },
+    { role: "unit", xMin: 405, xMax: 450 },
+    { role: "unitPrice", xMin: 450, xMax: 520 },
+    { role: "lineTotal", xMin: 510, xMax: 600 },
+  ],
+  descriptionCatchAllMaxX: 385,
+  skipLine: /^(pos$|art\.-nr|bezeichnung$|menge$|einzelpreis$|gesamtpreis$|in eur$)/i,
+  minY: 380,
+};

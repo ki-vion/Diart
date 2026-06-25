@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PdfLine } from "../../pdf/types";
+import { scoreHeaderLine } from "./item-blocks";
 import {
   findTableEndIndex,
   findTableRegion,
@@ -7,6 +8,8 @@ import {
   isValidTableHeader,
   lineFitsTableGrid,
 } from "./table-region";
+import { clusterLineIntoCells, inferColumnBoundaries } from "./cluster-columns";
+import { mapColumnsFromHeaderCells } from "./header-map";
 
 function line(y: number, parts: Array<{ text: string; x: number; fontSize?: number }>): PdfLine {
   const words = parts.map((p) => ({
@@ -116,6 +119,29 @@ describe("findTableRegion", () => {
     expect(region).not.toBeNull();
     expect(region?.columnMap.article).toBeDefined();
     expect(region?.dataStartIndex).toBeGreaterThan(4);
+  });
+
+  it("detects Mahler-style header split across lines at the same Y", () => {
+    const y = 405;
+    const lines: PdfLine[] = [
+      line(y, [{ text: "Pos", x: 62 }]),
+      line(y, [{ text: "Art.-Nr.", x: 102 }]),
+      line(y, [{ text: "Bezeichnung", x: 138 }]),
+      line(y, [{ text: "Menge", x: 396 }]),
+      line(y, [{ text: "Einzelpreis", x: 456 }]),
+      line(y, [{ text: "Gesamtpreis", x: 526 }]),
+      line(436, [{ text: "1,0", x: 66 }]),
+    ];
+    expect(lines.map((l) => scoreHeaderLine(l.text))).toEqual([1, 1, 1, 1, 1, 1, 0]);
+    const tokens = lines.slice(0, 6).flatMap((l) => l.words.map((w) => ({ text: w.text, x: w.x })));
+    const boundaries = inferColumnBoundaries(tokens);
+    const cells = clusterLineIntoCells(tokens, boundaries);
+    const map = mapColumnsFromHeaderCells(cells);
+    expect(isValidTableHeader(map, 6)).toBe(true);
+    const region = findTableRegion({ lines, height: 842 });
+    expect(region).not.toBeNull();
+    expect(region?.columnMap.position).toBe(0);
+    expect(region?.dataStartIndex).toBe(6);
   });
 
   it("detects header without Betrag column", () => {

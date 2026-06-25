@@ -12,7 +12,7 @@ import { loadMupdf } from "./lib/mupdf-node.js";
 import { detectProfile } from "../src/extractor/profiles/detect-profile.js";
 import { extractByProfile } from "../src/extractor/profiles/index.js";
 import { calibrateColumnWindows, lineToCells, trimCells } from "../src/extractor/pipeline/columns.js";
-import { NORIT_TEMPLATE, RK_STARK_TEMPLATE } from "../src/extractor/pipeline/templates.js";
+import { NORIT_TEMPLATE, RK_STARK_TEMPLATE, MAHLER_TEMPLATE } from "../src/extractor/pipeline/templates.js";
 import type { PdfLine } from "../src/pdf/types.js";
 import type { PdfProfile } from "../src/extractor/profiles/types.js";
 import type { TableTemplate } from "../src/extractor/pipeline/types.js";
@@ -39,6 +39,8 @@ function templateForProfile(profile: PdfProfile): TableTemplate | null {
       return RK_STARK_TEMPLATE;
     case "Norit":
       return NORIT_TEMPLATE;
+    case "Bauwaren Mahler":
+      return MAHLER_TEMPLATE;
     default:
       return null;
   }
@@ -83,7 +85,7 @@ async function exploreBlocks(mupdf: Awaited<ReturnType<typeof loadMupdf>>, pdfPa
   };
 
   const pagesOut = structured.pages.map((page) => {
-    const tableMeta = getPageTableMeta(page);
+    const tableMeta = getPageTableMeta(page, { profile });
     const linesOut = page.lines.map((line, lineIndex) => {
       const cells = assignCells(line);
       const xs = line.words.map((w) => w.x);
@@ -138,7 +140,7 @@ async function exploreBlocks(mupdf: Awaited<ReturnType<typeof loadMupdf>>, pdfPa
     for (const page of structured.pages) {
       const prefix = path.join(outDir, `page-${String(page.index).padStart(2, "0")}`);
       fs.writeFileSync(`${prefix}-cells.tsv`, cellsToTsv(page.lines, assignCells), "utf8");
-      const tableMeta = getPageTableMeta(page);
+      const tableMeta = getPageTableMeta(page, { profile });
       const lineFlags = page.lines.map((_, i) => exploreLineFlags(page, i, tableMeta));
       fs.writeFileSync(
         `${prefix}-lines.tsv`,
