@@ -68,7 +68,7 @@ describe("extractMahlerItems", () => {
       pages: [{ index: 0, width: 595, height: 842, lines, rawText: "Bauwaren Mahler GmbH" }],
     };
 
-    const { items } = extractMahlerItems(structured, "mahler.pdf");
+    const { items } = extractMahlerItems(structured);
     expect(items.length).toBe(2);
     expect(items[0]?.position).toBe("1,0");
     expect(items[0]?.article_number).toBe("252494");

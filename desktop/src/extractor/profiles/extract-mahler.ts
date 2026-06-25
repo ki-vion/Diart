@@ -6,7 +6,7 @@ export function extractMahler(
   structured: PdfStructured,
   source_pdf: string,
 ): ExtractionResult {
-  const { items } = extractMahlerItems(structured, source_pdf);
+  const { items } = extractMahlerItems(structured);
   return {
     layout_id: "Bauwaren Mahler",
     source_pdf,

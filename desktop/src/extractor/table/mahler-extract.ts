@@ -262,9 +262,7 @@ function dedupeLineItems(items: LineItem[]): LineItem[] {
   return out;
 }
 
-export function extractMahlerItems(
-  structured: PdfStructured
-): { items: LineItem[] } {
+export function extractMahlerItems(structured: PdfStructured): { items: LineItem[] } {
   const items: LineItem[] = [];
   for (const page of structured.pages) {
     items.push(...extractFromPage(page));
