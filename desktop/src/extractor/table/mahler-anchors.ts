@@ -1,5 +1,4 @@
 import type { PdfLine } from "../../pdf/types";
-import type { TableColumnMap } from "./header-map";
 import type { TableRegion } from "./table-region";
 import { columnBand, textInColumn } from "./generic-anchors";
 import { wordRightX } from "./line-guards";

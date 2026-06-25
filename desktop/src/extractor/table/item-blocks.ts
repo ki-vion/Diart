@@ -28,7 +28,7 @@ import {
   NORIT_POS,
   parseNoritBlock,
 } from "./norit-block.ts";
-import { cellMatchesHeaderHint, HEADER_HINTS, type TableColumnMap } from "./header-map";
+import { cellMatchesHeaderHint, HEADER_HINTS, type ColumnRole, type TableColumnMap } from "./header-map";
 
 const RK_HEAD = /^(?<pos>\d{5})\s*(?<art>\d{6,})\b/;
 const RK_HEAD_LINE = /^\d{5}\s*\d{6,}\b/;

@@ -1,6 +1,5 @@
 import type { PdfLine } from "../../pdf/types";
 import { wordRightX } from "./line-guards";
-import type { TableColumnMap } from "./header-map";
 import type { TableRegion } from "./table-region";
 
 /** Position in first column: 1–8 digits, optional decimal part (e.g. 1,0 or 2). */
