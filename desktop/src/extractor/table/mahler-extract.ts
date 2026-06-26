@@ -45,6 +45,20 @@ export function cleanMahlerDescription(description: string): string {
     .trim();
 }
 
+/** Running-meter profiles: PDF total uses qty × unit price; billing is per 100 lfm. */
+export function isMahlerProfilItem(description: string): boolean {
+  return /profil/i.test(description);
+}
+
+function adjustMahlerProfilPricing(item: LineItem): LineItem {
+  if (!isMahlerProfilItem(item.description)) return item;
+  const line_total =
+    item.line_total !== null
+      ? Math.round((item.line_total / 100) * 100) / 100
+      : null;
+  return { ...item, price_per: 100, line_total };
+}
+
 function lineToTokens(line: PdfLine): WordToken[] {
   return line.words.map((w) => ({ text: w.text, x: w.x }));
 }
@@ -215,12 +229,12 @@ function parseMahlerBlock(
     }
   }
 
-  return {
+  return adjustMahlerProfilPricing({
     ...parsed,
     description: cleanMahlerDescription(
       descParts.join("\n").trim() || cellAt(merged, region.columnMap.description),
     ),
-  };
+  });
 }
 
 function extractFromPage(page: PdfPageStructured): LineItem[] {

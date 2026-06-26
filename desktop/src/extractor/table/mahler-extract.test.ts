@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PdfLine, PdfStructured } from "../../pdf/types";
-import { cleanMahlerDescription, extractMahlerItems, isMahlerSkipDescriptionLine } from "./mahler-extract";
+import { cleanMahlerDescription, extractMahlerItems, isMahlerProfilItem, isMahlerSkipDescriptionLine } from "./mahler-extract";
 import { MAHLER_POSITION_RE } from "./mahler-anchors";
 
 function line(y: number, parts: Array<{ text: string; x: number }>): PdfLine {
@@ -29,6 +29,14 @@ describe("cleanMahlerDescription", () => {
       "Dano Bauplatte GKB 12,5 mm\n12,5 x 1250 x 2000 mm",
     );
     expect(isMahlerSkipDescriptionLine("Kommission Abholung")).toBe(true);
+  });
+});
+
+describe("isMahlerProfilItem", () => {
+  it("matches profile descriptions case-insensitively", () => {
+    expect(isMahlerProfilItem("C-Wandprofil 75/50/0,6 mm")).toBe(true);
+    expect(isMahlerProfilItem("U-Aussteifungsprofil 98/40/2 mm")).toBe(true);
+    expect(isMahlerProfilItem("Dano Bauplatte GKB 12,5 mm")).toBe(false);
   });
 });
 
@@ -77,6 +85,10 @@ describe("extractMahlerItems", () => {
     expect(items[0]?.description).not.toContain("3.384,00");
     expect(items[0]?.description).not.toMatch(/^1,0/);
     expect(items[1]?.position).toBe("2,0");
+    expect(items[1]?.description).toContain("C-Wandprofil");
+    expect(items[1]?.line_total).toBe(5.12);
+    expect(items[1]?.price_per).toBe(100);
+    expect(items[0]?.price_per).toBeUndefined();
     expect(items.some((i) => i.position === "86159")).toBe(false);
   });
 });
