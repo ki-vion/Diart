@@ -2,6 +2,7 @@ import type { PdfLine, PdfPageStructured, PdfWord } from "../../pdf/types";
 import { isPlausibleDescriptionLine } from "../table/line-guards";
 import type { ColumnRole } from "../table/header-map";
 import type { ColumnWindow, RowCells } from "./types";
+import { RK_BILLING_UNIT_RE } from "../table/rk-billing";
 
 const ASSIGN_PRIORITY: ColumnRole[] = [
   "lineTotal",
@@ -13,7 +14,7 @@ const ASSIGN_PRIORITY: ColumnRole[] = [
   "description",
 ];
 
-const RK_BILLING_UNIT = /^(ST|M2|SA|FL|PKT|KAR|St|Stück|Stk|kg\/Sa)$/i;
+const RK_BILLING_UNIT = RK_BILLING_UNIT_RE;
 const LAIER_BILLING_UNIT =
   /^(Sack|Stück|Stk\.?|ltr|m²|m2|m|Kanister|Pal\.?|Bund|Rolle?(?:\(n\))?|nr\.?)$/i;
 

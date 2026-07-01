@@ -6,10 +6,18 @@ import type { ColumnWindow, RowCells, TableTemplate } from "../pipeline/types";
 import { isBlockTerminatorLine, isPlausibleDescriptionLine } from "./line-guards";
 import { isNonItemLine } from "./table-zone";
 import { isRkNonItemText } from "../profiles/rk-footer";
+import {
+  assignRkBillingUnit,
+  isRkBillingUnit,
+  isRkPackagingUnitRow,
+  parseRkPeSuffix,
+  parseRkQtyUnitLine,
+  RK_BILLING_UNIT_RE,
+} from "./rk-billing";
 
 const UNIT_PRICE_LINE = /^(?<price>[\d.,]+)\s+EUR\s*\/\s*/i;
 const EUR_PER = /EUR\s*\/\s*1/i;
-const BILLING_UNIT_ONLY = /^(ST|M2|SA|FL|PKT|St|Stück|Stk|kg\/Sa)$/i;
+const BILLING_UNIT_ONLY = RK_BILLING_UNIT_RE;
 const HAS_LETTERS = /[A-Za-zÄÖÜäöüß]/;
 
 export type ColumnBlockContext = {
@@ -148,32 +156,51 @@ function pickArtikelLineText(cells: RowCells, lineText: string): string | null {
 }
 
 function mergeBillingFields(item: LineItem, cells: RowCells, lineText: string): void {
+  const trimmed = lineText.trim();
+  const qtyUnitFromLine = parseRkQtyUnitLine(trimmed);
+  if (qtyUnitFromLine) {
+    item.quantity ??= qtyUnitFromLine.quantity;
+    assignRkBillingUnit(item, qtyUnitFromLine.unit);
+  }
+
   const qtyRaw = cells.quantity?.trim() ?? "";
   if (qtyRaw) {
-    const q = parseDeNumber(qtyRaw);
-    if (q !== null) item.quantity ??= q;
-    else {
-      const m = /^([\d.,]+)\s+(.+)$/.exec(qtyRaw);
-      if (m) {
-        const parsed = parseDeNumber(m[1] ?? "");
-        if (parsed !== null) item.quantity ??= parsed;
-        if (m[2]) item.unit ??= m[2].trim();
+    const qtyUnitFromCell = parseRkQtyUnitLine(qtyRaw);
+    if (qtyUnitFromCell) {
+      item.quantity ??= qtyUnitFromCell.quantity;
+      assignRkBillingUnit(item, qtyUnitFromCell.unit);
+    } else {
+      const q = parseDeNumber(qtyRaw);
+      if (q !== null) item.quantity ??= q;
+      else {
+        const m = /^([\d.,]+)\s+(.+)$/.exec(qtyRaw);
+        if (m) {
+          const parsed = parseDeNumber(m[1] ?? "");
+          if (parsed !== null) item.quantity ??= parsed;
+          if (m[2] && isRkBillingUnit(m[2])) assignRkBillingUnit(item, m[2].trim());
+        }
       }
     }
   }
 
   const unit = cells.unit?.trim();
-  if (unit) item.unit ??= unit;
+  if (unit && !isRkPackagingUnitRow(trimmed)) {
+    assignRkBillingUnit(item, unit);
+  }
 
   let up = parseDeNumber(cells.unitPrice ?? "");
-  if (up === null && UNIT_PRICE_LINE.test(lineText)) {
-    up = parseDeNumber(UNIT_PRICE_LINE.exec(lineText)?.groups?.price ?? "");
+  if (up === null && UNIT_PRICE_LINE.test(trimmed)) {
+    up = parseDeNumber(UNIT_PRICE_LINE.exec(trimmed)?.groups?.price ?? "");
   }
-  if (up === null && EUR_PER.test(lineText)) {
-    const m = /^([\d.,]+)/.exec(lineText);
+  if (up === null && EUR_PER.test(trimmed)) {
+    const m = /^([\d.,]+)/.exec(trimmed);
     if (m) up = parseDeNumber(m[1] ?? "");
   }
   if (up !== null) item.unit_price ??= up;
+
+  const pe = parseRkPeSuffix(trimmed);
+  if (pe.price_per !== null) item.price_per ??= pe.price_per;
+  if (pe.billing_unit) assignRkBillingUnit(item, pe.billing_unit);
 
   const total = parseDeNumber(cells.lineTotal ?? "");
   if (total !== null) item.line_total ??= total;

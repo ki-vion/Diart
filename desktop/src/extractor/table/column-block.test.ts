@@ -154,4 +154,94 @@ describe("parseColumnItemBlock", () => {
     expect(item?.description).toContain("feuerverzinkt");
     expect(item?.line_total).toBe(1934.3);
   });
+
+  it("parses 00010 with KG billing unit and ignores EIM packaging", () => {
+    const item = parseColumnItemBlock(
+      [
+        rkLine(80, [
+          { text: "00010", x: X.pos },
+          { text: "1190364", x: X.art },
+        ]),
+        rkLine(92, [{ text: "18", x: X.qty }]),
+        rkLine(94, [{ text: "=", x: X.desc }, { text: "1", x: 120 }]),
+        rkLine(96, [{ text: "KG", x: 330 }]),
+        rkLine(97, [{ text: "EIM", x: 330 }]),
+        rkLine(98, [{ text: "1,21", x: X.unitPrice }]),
+        rkLine(99, [
+          { text: "EUR/1", x: X.unitPrice },
+          { text: "KG", x: 430 },
+        ]),
+        rkLine(100, [{ text: "21,78", x: X.lineTotal }]),
+        rkLine(82, [{ text: "Rigips ProMix Finish", x: X.desc }]),
+        rkLine(83, [{ text: "Feinspachtelmasse 18 kg/Eim", x: X.desc }]),
+      ],
+      ctx,
+    );
+
+    expect(item?.position).toBe("00010");
+    expect(item?.quantity).toBe(18);
+    expect(item?.unit).toBe("KG");
+    expect(item?.unit_price).toBe(1.21);
+    expect(item?.line_total).toBe(21.78);
+  });
+
+  it("parses 00040 with ROL billing unit from qty line", () => {
+    const item = parseColumnItemBlock(
+      [
+        rkLine(349, [
+          { text: "00040", x: X.pos },
+          { text: "1041010", x: X.art },
+        ]),
+        rkLine(349.1, [
+          { text: "1", x: X.qty },
+          { text: "ROL", x: 330 },
+        ]),
+        rkLine(349.2, [{ text: "7,58", x: X.unitPrice }]),
+        rkLine(349.3, [
+          { text: "EUR/1", x: X.unitPrice },
+          { text: "ROL", x: 430 },
+        ]),
+        rkLine(349.4, [{ text: "7,58", x: X.lineTotal }]),
+        rkLine(361, [{ text: "RAW PE Trennwandband B1 !Z", x: X.desc }]),
+      ],
+      ctx,
+    );
+
+    expect(item?.quantity).toBe(1);
+    expect(item?.unit).toBe("ROL");
+    expect(item?.description).not.toMatch(/^ROL$/m);
+    expect(item?.description).toContain("RAW PE Trennwandband");
+  });
+
+  it("parses profile row with EUR/100 M and keeps M as billing unit", () => {
+    const item = parseColumnItemBlock(
+      [
+        rkLine(462, [
+          { text: "00060", x: X.pos },
+          { text: "661065", x: X.art },
+        ]),
+        rkLine(462.1, [{ text: "160", x: X.qty }]),
+        rkLine(462.2, [{ text: "M", x: 330 }]),
+        rkLine(462.3, [{ text: "132,02", x: X.unitPrice }]),
+        rkLine(462.4, [
+          { text: "EUR/100", x: X.unitPrice },
+          { text: "M", x: 430 },
+        ]),
+        rkLine(474, [{ text: "Rigips UW-Profil 75/40/0,6 mm", x: X.desc }]),
+        rkLine(474.1, [
+          { text: "=", x: X.desc },
+          { text: "40", x: 120 },
+        ]),
+        rkLine(474.2, [{ text: "ST", x: 330 }]),
+        rkLine(474.3, [{ text: "211,23", x: X.lineTotal }]),
+      ],
+      ctx,
+    );
+
+    expect(item?.quantity).toBe(160);
+    expect(item?.unit).toBe("M");
+    expect(item?.unit_price).toBe(132.02);
+    expect(item?.price_per).toBe(100);
+    expect(item?.line_total).toBe(211.23);
+  });
 });
