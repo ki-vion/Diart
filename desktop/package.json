@@ -11,11 +11,13 @@
     "test:run": "vitest run",
     "explore:mupdf": "tsx scripts/explore-mupdf.ts",
     "explore:blocks": "tsx scripts/explore-blocks.ts",
-    "smoke:extract": "tsx scripts/smoke-table-extract.ts"
+    "smoke:extract": "tsx scripts/smoke-table-extract.ts",
+    "postinstall": "node scripts/copy-tesseract-assets.mjs"
   },
   "dependencies": {
     "exceljs": "^3.4.0",
     "mupdf": "^1.27.0",
+    "tesseract.js": "^5.1.1",
     "vue": "^3.5.13"
   },
   "overrides": {

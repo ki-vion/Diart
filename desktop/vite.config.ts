@@ -10,7 +10,7 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icons/*"],
       manifest: {
-        name: "Diart — PDF zu Excel",
+        name: "Diart â€” PDF zu Excel",
         short_name: "Diart",
         start_url: ".",
         display: "standalone",
@@ -22,8 +22,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,wasm,png,svg,ico,webmanifest}"],
-        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
+        globPatterns: ["**/*.{js,css,html,wasm,png,svg,ico,webmanifest,traineddata}"],
+        maximumFileSizeToCacheInBytes: 30 * 1024 * 1024,
       },
     }),
   ],
@@ -42,3 +42,4 @@ export default defineConfig({
     target: "esnext",
   },
 });
+
