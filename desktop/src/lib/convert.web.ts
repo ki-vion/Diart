@@ -107,18 +107,27 @@ function toPreviewRows(
 export async function convertPdfFile(
   file: File,
   aufschlagPercent: number,
+  options?: { onStatus?: (msg: string) => void },
 ): Promise<ConvertResponse> {
   const aufschlag = aufschlagPercent / 100;
+  const { onStatus } = options ?? {};
 
   try {
     const { extractPdfStructured } = await import("../pdf/structured");
-    const { runExtraction } = await import("../extractor");
     const { buildExcelBuffer } = await import("../export/excel");
 
+    onStatus?.("PDF wird gelesen…");
     const structured = await extractPdfStructured(file);
-    const { detectProfile } = await import("../extractor");
-    const extraction = runExtraction(structured);
-    const profile = detectProfile(structured);
+    const { detectProfile, runExtraction } = await import("../extractor");
+    let forExtract = structured;
+    if (detectProfile(structured) === "generic") {
+      onStatus?.("Unbekanntes Layout — OCR läuft…");
+      const { ocrStructuredFromPdf } = await import("../pdf/ocr");
+      forExtract = await ocrStructuredFromPdf(file);
+    }
+    onStatus?.("Positionen werden extrahiert…");
+    const extraction = runExtraction(forExtract);
+    const profile = detectProfile(forExtract);
     const extraction_mode = profile === "generic" ? "table" : "layout";
 
     const xlsxBytes = await buildExcelBuffer(extraction, { aufschlag });

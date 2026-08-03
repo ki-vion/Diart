@@ -10,6 +10,7 @@ import { formatEuroDe, formatQuantityDe } from "./export/format-money";
 
 const aufschlagPercent = ref(20);
 const loading = ref(false);
+const status = ref("");
 const result = ref<ConvertResponse | null>(null);
 const error = ref("");
 const pdfInput = ref<HTMLInputElement | null>(null);
@@ -57,8 +58,13 @@ async function onPdfSelected(event: Event) {
   loading.value = true;
   error.value = "";
   result.value = null;
+  status.value = "Wird konvertiert…";
   try {
-    const res = await convertPdfFile(file, aufschlagPercent.value);
+    const res = await convertPdfFile(file, aufschlagPercent.value, {
+      onStatus: (msg) => {
+        status.value = msg;
+      },
+    });
     result.value = res;
     if (!res.ok) {
       error.value = res.error ?? "Konvertierung fehlgeschlagen";
@@ -123,7 +129,7 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
           @change="onPdfSelected"
         />
         <button type="button" class="primary" :disabled="loading" @click="openFilePicker">
-          {{ loading ? "Wird konvertiert…" : "PDF auswählen & konvertieren" }}
+          {{ loading ? status || "Wird konvertiert…" : "PDF auswählen & konvertieren" }}
         </button>
       </div>
     </section>
