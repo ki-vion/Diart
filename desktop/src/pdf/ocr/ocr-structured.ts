@@ -1,15 +1,14 @@
-﻿import type { PdfStructured } from "../types";
+import type { PdfStructured, PdfPageStructured } from "../types";
 import { linesFromPdfWords, pdfWordsFromOcrBoxes } from "./lines-from-words";
-import { renderPdfPages } from "./render-pages";
+import { forEachRenderedPdfPage } from "./render-pages";
 import { recognizePng } from "./tesseract-worker";
 
 async function ocrStructuredFromRendered(
   sourceFileName: string,
   file: File,
 ): Promise<PdfStructured> {
-  const pagesRendered = await renderPdfPages(file, 144);
-  const pages = [];
-  for (const { png, meta } of pagesRendered) {
+  const pages: PdfPageStructured[] = [];
+  await forEachRenderedPdfPage(file, 144, async ({ png, meta }) => {
     const boxes = await recognizePng(png);
     const words = pdfWordsFromOcrBoxes(boxes, meta);
     const lines = linesFromPdfWords(words);
@@ -21,7 +20,7 @@ async function ocrStructuredFromRendered(
       lines,
       rawText,
     });
-  }
+  });
   return { sourceFileName, pages };
 }
 
