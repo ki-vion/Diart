@@ -10,7 +10,7 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icons/*"],
       manifest: {
-        name: "Diart â€” PDF zu Excel",
+        name: "Diart — PDF zu Excel",
         short_name: "Diart",
         start_url: ".",
         display: "standalone",
