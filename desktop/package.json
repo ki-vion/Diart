@@ -12,6 +12,7 @@
     "explore:mupdf": "tsx scripts/explore-mupdf.ts",
     "explore:blocks": "tsx scripts/explore-blocks.ts",
     "smoke:extract": "tsx scripts/smoke-table-extract.ts",
+    "smoke:ocr": "tsx scripts/smoke-ocr-extract.ts",
     "postinstall": "node scripts/copy-tesseract-assets.mjs"
   },
   "dependencies": {

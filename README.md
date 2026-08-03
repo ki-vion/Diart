@@ -1,6 +1,6 @@
 # Diart — PDF-Angebot zu Excel
 
-Offline-fähige **Progressive Web App (PWA)** zum Extrahieren von Artikelpositionen aus **Text-PDFs** (Angebote/Rechnungen) und Export als Excel im Format „Materialliste mit VK Preis“ (inkl. Aufschlag und VK-Formeln).
+Offline-fähige **Progressive Web App (PWA)** zum Extrahieren von Artikelpositionen aus **PDF-Angeboten/Rechnungen** (Text-PDFs und gescannte/unbekannte Layouts per OCR) und Export als Excel im Format „Materialliste mit VK Preis“ (inkl. Aufschlag und VK-Formeln).
 
 Läuft im Browser auf **Windows-PC** und **iPad** — ohne Server, ohne `.exe`.
 
@@ -37,13 +37,15 @@ Nach dem ersten Laden werden App-Shell, MuPDF-WASM und Assets per Service Worker
 ```bash
 cd desktop
 npm run test:run
+npm run smoke:extract   # Text-PDFs in Vorlagen/ (MuPDF-Layer)
+npm run smoke:ocr       # OCR-Pfad auf FPF-Proforma (gescannt/unbekannt)
 ```
 
 ### Unterstützte Layouts
 
-`kan_ifb`, `norit_rechnung`, `rk_stark`, `laier_van`, `mahler_angebot`
+`kan_ifb`, `norit_rechnung`, `rk_stark`, `laier_van`, `mahler_angebot`, `econ floor` (Proforma/Rechnungen per OCR)
 
-Die App lädt PDFs als **`PdfStructured`** (MuPDF `asText` + Wörter mit x/y), erkennt ein **Profil** (`detectProfile`) und extrahiert mit dem passenden Parser (Orchestrator unter `desktop/src/extractor/`). Unbekannte PDFs nutzen den generischen Fallback `unbekannt`.
+Die App lädt PDFs als **`PdfStructured`** (MuPDF `asText` + Wörter mit x/y), erkennt ein **Profil** (`detectProfile`) und extrahiert mit dem passenden Parser (Orchestrator unter `desktop/src/extractor/`). Bekannte Text-PDFs nutzen den MuPDF-Textlayer; **unbekannte oder gescannte PDFs** (`generic`) werden gerendert und per **OCR** (Tesseract.js, `deu`+`eng`) in dieselbe Struktur überführt, danach Profil + Extraktion wie gewohnt.
 
 ```bash
 cd desktop
@@ -92,10 +94,11 @@ npm run smoke:extract
 | Schritt | Modul |
 |--------|--------|
 | PDF → Textzeilen | [MuPDF.js](https://www.npmjs.com/package/mupdf) (WASM) |
+| Unbekanntes Layout → OCR | [Tesseract.js](https://www.npmjs.com/package/tesseract.js) (`deu`+`eng`, nur bei Profil `generic`) |
 | Layout + Positionen | TypeScript (`desktop/src/extractor/`) |
 | Excel-Export | ExcelJS (`desktop/src/export/`) |
 
-**Hinweis:** MuPDF.js steht unter **AGPL** — für kommerzielle Nutzung ggf. Lizenz bei Artifex klären.
+**Lizenzen:** MuPDF.js steht unter **AGPL** — für kommerzielle Nutzung ggf. Lizenz bei Artifex klären. Tesseract.js und die mitgelieferten Sprachdaten (`deu`, `eng`) unter **Apache-2.0**. Die App kombiniert beide Laufzeit-Bibliotheken clientseitig in der PWA.
 
 Beispiel-PDFs zum Testen liegen in `Vorlagen/`.
 
@@ -103,7 +106,4 @@ Beispiel-PDFs zum Testen liegen in `Vorlagen/`.
 
 - Spezifikation: `docs/superpowers/specs/2026-05-28-pwa-offline-mupdf-design.md`
 - Implementierungsplan: `docs/superpowers/plans/2026-05-28-pwa-offline-mupdf-implementation.md`
-
-
-npm run explore:mupdf
-npm run explore:blocks
+- OCR / unbekannte Layouts: `docs/superpowers/specs/2026-08-03-ocr-unknown-layout-design.md`
