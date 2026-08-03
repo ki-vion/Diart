@@ -26,6 +26,14 @@ export function detectProfile(structured: PdfStructured): PdfProfile {
   if (page0.includes("Bauwaren Mahler") || page0.includes("www.mahler.de")) {
     return "Bauwaren Mahler";
   }
+  if (
+    /Proforma Invoice/i.test(page0) ||
+    /ECONFLOOR/i.test(page0) ||
+    /econ floor/i.test(page0) ||
+    /FPF\/\d{4}\/\d+/i.test(page0)
+  ) {
+    return "econ floor";
+  }
 
   return "generic";
 }

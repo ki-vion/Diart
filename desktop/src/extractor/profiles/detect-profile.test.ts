@@ -21,4 +21,11 @@ describe("detectProfile", () => {
     );
     expect(detectProfile(structured("unknown"))).toBe("generic");
   });
+
+  it("detects Econ Floor / FPF proforma invoices", () => {
+    expect(detectProfile(structured("Proforma Invoice\nFPF/2026/234"))).toBe("econ floor");
+    expect(detectProfile(structured("ECONFLOOR\nDocument Number"))).toBe("econ floor");
+    expect(detectProfile(structured("econ floor polska"))).toBe("econ floor");
+    expect(detectProfile(structured("Document FPF/2026/234"))).toBe("econ floor");
+  });
 });
