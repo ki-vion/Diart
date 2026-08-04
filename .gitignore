@@ -1,3 +1,4 @@
 .worktrees/
 desktop/node_modules/
 desktop/dist/
+.superpowers/*
