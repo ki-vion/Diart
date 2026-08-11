@@ -42,7 +42,7 @@ npm run test:run
 
 ### Unterstützte Layouts
 
-`kan_ifb`, `norit_rechnung`, `rk_stark`, `laier_van`, `mahler_angebot`
+`kan_ifb`, `norit_rechnung`, `rk_stark`, `laier_van`, `mahler_angebot`, `koelnsperger`, `econ_floor`
 
 Die App lädt PDFs als **`PdfStructured`** (MuPDF `asText` + Wörter mit x/y), erkennt ein **Profil** (`detectProfile`) und extrahiert mit dem passenden Parser (Orchestrator unter `desktop/src/extractor/`). Unbekannte PDFs nutzen den generischen Fallback `unbekannt`.
 

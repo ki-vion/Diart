@@ -3,6 +3,7 @@ import type { PdfProfile } from "../profiles/types";
 import { findGenericPositionAnchors } from "./generic-anchors";
 import { findMahlerPositionAnchors } from "./mahler-anchors";
 import { findKoelnspergerPositionAnchors } from "./koelnsperger-anchors";
+import { findEconFloorPositionAnchors } from "./econ-floor-anchors";
 import {
   findBlockAnchors,
   type BlockAnchor,
@@ -64,6 +65,28 @@ export function getPageTableMeta(
       kind: "generic",
     }));
     const anchorByLineIndex = new Map(anchors.map((a) => [a.lineIndex, a.kind]));
+    return { region, anchors, anchorByLineIndex };
+  }
+
+  if (options?.profile === "econ floor") {
+    const dataStart = 0;
+    const dataEnd = page.lines.length;
+    const anchorIndices = findEconFloorPositionAnchors(page.lines, dataStart, dataEnd);
+    const anchors: BlockAnchor[] = anchorIndices.map((lineIndex) => ({
+      lineIndex,
+      kind: "generic",
+    }));
+    const anchorByLineIndex = new Map(anchors.map((a) => [a.lineIndex, a.kind]));
+    const region =
+      findTableRegion(page) ??
+      ({
+        headerStart: -1,
+        headerEnd: -1,
+        dataStartIndex: anchorIndices[0] ?? 0,
+        dataEndIndex: dataEnd,
+        boundaries: [],
+        columnMap: { position: 0 },
+      } as const);
     return { region, anchors, anchorByLineIndex };
   }
 

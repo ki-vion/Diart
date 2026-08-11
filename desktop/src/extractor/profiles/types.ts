@@ -5,4 +5,5 @@ export type PdfProfile =
   | "Rudolf Laier GmbH"
   | "Bauwaren Mahler"
   | "Kölnsperger"
+  | "econ floor"
   | "generic";

@@ -2,8 +2,8 @@ import type { PdfLine } from "../../pdf/types";
 import { wordRightX } from "./line-guards";
 import type { TableRegion } from "./table-region";
 
-/** Position in first column: 1–8 digits, optional decimal part (e.g. 1,0 or 2). */
-export const GENERIC_POSITION_RE = /^\d{1,8}([,.]\d+)?$/;
+/** Position in first column: 1–8 digits, optional decimal (1,0) or trailing dot (1.). */
+export const GENERIC_POSITION_RE = /^\d{1,8}([,.]\d+)?\.?$/;
 
 export function columnBand(
   boundaries: number[],

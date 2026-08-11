@@ -132,3 +132,31 @@ export const KOELNSPERGER_TEMPLATE: TableTemplate = {
   skipLine: /^(pos\.|art-nr|übertrag|zwischensumme|gesamt|in eur$)/i,
   minY: 480,
 };
+
+/** ECONFLOOR Polska — Commercial Offer (EN headers, No. + Item/Service). */
+export const ECON_FLOOR_TEMPLATE: TableTemplate = {
+  layout_id: "econ floor",
+  anchorRole: "position",
+  anchorPattern: /^\d{1,3}$/,
+  headerHints: {
+    position: ["no", "no."],
+    article: ["item"],
+    description: ["item", "service", "name"],
+    quantity: ["quantity", "qty"],
+    unit: ["uom", "unit"],
+    unitPrice: ["price", "subtotal price"],
+    lineTotal: ["value", "subtotal value"],
+  },
+  defaultWindows: [
+    { role: "position", xMin: 0, xMax: 95 },
+    { role: "article", xMin: 95, xMax: 160 },
+    { role: "description", xMin: 95, xMax: 210 },
+    { role: "quantity", xMin: 250, xMax: 320 },
+    { role: "unit", xMin: 280, xMax: 320 },
+    { role: "unitPrice", xMin: 330, xMax: 400 },
+    { role: "lineTotal", xMin: 450, xMax: 540 },
+  ],
+  descriptionCatchAllMaxX: 210,
+  skipLine: /^(no\.?$|item\/service|box$|quantity|subtotal|\[eur\]|vat$|including|total:|total amout|say total)/i,
+  minY: 450,
+};

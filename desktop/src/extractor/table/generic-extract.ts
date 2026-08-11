@@ -14,7 +14,7 @@ import type { TableRegion } from "./table-region";
 import type { PdfLine, PdfPageStructured } from "../../pdf/types";
 
 const FOOTER_RE =
-  /^(summe|gesamt|übertrag|uebertrag|mwst|netto|brutto|subtotal|total|endsumme)/i;
+  /^(summe|zwischensumme|gesamt|übertrag|uebertrag|mwst|netto|brutto|subtotal|total|endsumme)/i;
 
 const ARTICLE_NUM_RE = /^(?:artikelnummer:\s*)?(\d{4,10})\b/i;
 const UNIT_ONLY =

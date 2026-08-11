@@ -2,7 +2,7 @@ import type { PdfLine } from "../../pdf/types";
 
 /** Summary / legal text after the item table (layout-agnostic). */
 const GENERIC_POST_TABLE =
-  /^(Gewicht|Nettowert|Zahlungsbedingungen|Gesamtbetrag|Gesamt\s|Summe|Endsumme|MwSt\.?|USt\.|Brutto|Zahlungsziel|Total\s+EUR)/i;
+  /^(Gewicht|Nettowert|Zahlungsbedingungen|Gesamtbetrag|Gesamt\s|Zwischensumme|Summe|Endsumme|MwSt\.?|USt\.|Brutto|Zahlungsziel|Total\s+EUR)/i;
 
 const RK_POST_TABLE =
   /Gewicht\s*Brutto|DerGesamtbetrag|WirmöchtenSiedarauf|www\.stark-deutschland|MitfreundlichenGrüßen/i;

@@ -15,6 +15,7 @@ import { detectProfile } from "../src/extractor/profiles/detect-profile.js";
 import { extractByProfile } from "../src/extractor/profiles/index.js";
 import { calibrateColumnWindows, lineToCells, trimCells } from "../src/extractor/pipeline/columns.js";
 import {
+  ECON_FLOOR_TEMPLATE,
   KOELNSPERGER_TEMPLATE,
   NORIT_TEMPLATE,
   RK_STARK_TEMPLATE,
@@ -41,6 +42,8 @@ function templateForProfile(profile: PdfProfile): TableTemplate | null {
       return NORIT_TEMPLATE;
     case "Kölnsperger":
       return KOELNSPERGER_TEMPLATE;
+    case "econ floor":
+      return ECON_FLOOR_TEMPLATE;
     default:
       return null;
   }

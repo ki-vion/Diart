@@ -24,6 +24,11 @@ describe("detectProfile", () => {
         structured("Kölnsperger Bedachungshandel GmbH\ninfo@koelnsperger-gmbh.de"),
       ),
     ).toBe("Kölnsperger");
+    expect(
+      detectProfile(
+        structured("ECONFLOOR POLSKA\noffice@econfloorpolska.com\nCommercial Offer"),
+      ),
+    ).toBe("econ floor");
     expect(detectProfile(structured("unknown"))).toBe("generic");
   });
 });

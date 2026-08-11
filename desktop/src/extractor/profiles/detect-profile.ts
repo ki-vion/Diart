@@ -32,6 +32,13 @@ export function detectProfile(structured: PdfStructured): PdfProfile {
   ) {
     return "Kölnsperger";
   }
+  if (
+    page0.includes("econfloorpolska.com") ||
+    page0.includes("ECONFLOOR") ||
+    (page0.includes("Commercial Offer") && /ECONFLOOR/i.test(page0))
+  ) {
+    return "econ floor";
+  }
 
   return "generic";
 }

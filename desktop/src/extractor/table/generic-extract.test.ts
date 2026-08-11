@@ -3,6 +3,8 @@ import type { PdfLine } from "../../pdf/types";
 import { extractGenericTableItems } from "./generic-extract";
 import { findTableRegion } from "./table-region";
 import { isGenericPositionAnchor } from "./generic-anchors";
+import { isPostTableText } from "./table-zone";
+import { isHardTableEndLine } from "./line-guards";
 
 function line(y: number, parts: Array<{ text: string; x: number }>): PdfLine {
   const words = parts.map((p) => ({ ...p, y, fontSize: 10 }));
@@ -10,13 +12,23 @@ function line(y: number, parts: Array<{ text: string; x: number }>): PdfLine {
 }
 
 describe("generic position anchors", () => {
-  it("matches 1–8 digit positions with optional decimal", () => {
+  it("matches 1–8 digit positions with optional decimal or trailing dot", () => {
     const region = {
       boundaries: [39, 95, 130, 380, 440, 510],
       columnMap: { position: 0, article: 1, description: 2, quantity: 3, unitPrice: 4, lineTotal: 5 },
     };
     expect(isGenericPositionAnchor(line(436, [{ text: "1,0", x: 66 }]), region)).toBe(true);
+    expect(isGenericPositionAnchor(line(436, [{ text: "1.", x: 60 }]), region)).toBe(true);
+    expect(isGenericPositionAnchor(line(436, [{ text: "18.", x: 60 }]), region)).toBe(true);
     expect(isGenericPositionAnchor(line(436, [{ text: "11454178", x: 464 }]), region)).toBe(false);
+  });
+});
+
+describe("Zwischensumme as table end", () => {
+  it("treats Zwischensumme as post-table / hard end", () => {
+    expect(isPostTableText("Zwischensumme")).toBe(true);
+    expect(isHardTableEndLine("Zwischensumme")).toBe(true);
+    expect(isPostTableText("Summe")).toBe(true);
   });
 });
 
