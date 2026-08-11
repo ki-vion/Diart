@@ -6,6 +6,7 @@ Läuft im Browser auf **Windows-PC** und **iPad** — ohne Server, ohne `.exe`.
 
 ## Schnellstart
 
+
 **Voraussetzungen:** [Node.js](https://nodejs.org/) 20+
 
 ```bash
