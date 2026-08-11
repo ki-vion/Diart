@@ -26,6 +26,12 @@ export function detectProfile(structured: PdfStructured): PdfProfile {
   if (page0.includes("Bauwaren Mahler") || page0.includes("www.mahler.de")) {
     return "Bauwaren Mahler";
   }
+  if (
+    page0.includes("koelnsperger-gmbh.de") ||
+    page0.includes("Kölnsperger Bedachungshandel")
+  ) {
+    return "Kölnsperger";
+  }
 
   return "generic";
 }

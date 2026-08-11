@@ -2,6 +2,7 @@ import type { PdfLine, PdfPageStructured } from "../../pdf/types";
 import type { PdfProfile } from "../profiles/types";
 import { findGenericPositionAnchors } from "./generic-anchors";
 import { findMahlerPositionAnchors } from "./mahler-anchors";
+import { findKoelnspergerPositionAnchors } from "./koelnsperger-anchors";
 import {
   findBlockAnchors,
   type BlockAnchor,
@@ -47,6 +48,20 @@ export function getPageTableMeta(
     const anchors: BlockAnchor[] = anchorIndices.map((lineIndex) => ({
       lineIndex,
       kind: "mahler",
+    }));
+    const anchorByLineIndex = new Map(anchors.map((a) => [a.lineIndex, a.kind]));
+    return { region, anchors, anchorByLineIndex };
+  }
+
+  if (options?.profile === "Kölnsperger") {
+    const region = findTableRegionOrContinuation(page) ?? findTableRegion(page);
+    if (!region) {
+      return { region: null, anchors: [], anchorByLineIndex: new Map() };
+    }
+    const anchorIndices = findKoelnspergerPositionAnchors(page.lines, region);
+    const anchors: BlockAnchor[] = anchorIndices.map((lineIndex) => ({
+      lineIndex,
+      kind: "generic",
     }));
     const anchorByLineIndex = new Map(anchors.map((a) => [a.lineIndex, a.kind]));
     return { region, anchors, anchorByLineIndex };

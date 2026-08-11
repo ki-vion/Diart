@@ -19,6 +19,11 @@ describe("detectProfile", () => {
     expect(detectProfile(structured("Bauwaren Mahler GmbH\nwww.mahler.de"))).toBe(
       "Bauwaren Mahler",
     );
+    expect(
+      detectProfile(
+        structured("Kölnsperger Bedachungshandel GmbH\ninfo@koelnsperger-gmbh.de"),
+      ),
+    ).toBe("Kölnsperger");
     expect(detectProfile(structured("unknown"))).toBe("generic");
   });
 });

@@ -104,3 +104,31 @@ export const MAHLER_TEMPLATE: TableTemplate = {
   skipLine: /^(pos$|art\.-nr|bezeichnung$|menge$|einzelpreis$|gesamtpreis$|in eur$)/i,
   minY: 380,
 };
+
+/** Kölnsperger Bedachungshandel — Auftragsbestätigung, Pos. mit Punkt + 14-stellige Art-Nr. */
+export const KOELNSPERGER_TEMPLATE: TableTemplate = {
+  layout_id: "Kölnsperger",
+  anchorRole: "position",
+  anchorPattern: /^\d+\.$/,
+  headerHints: {
+    position: ["pos"],
+    article: ["art-nr", "artikelnummer"],
+    description: ["bezeichnung", "artikel"],
+    quantity: ["mge", "menge"],
+    unit: ["einh", "einheit"],
+    unitPrice: ["e-preis", "preis"],
+    lineTotal: ["ges", "preis"],
+  },
+  defaultWindows: [
+    { role: "position", xMin: 0, xMax: 72 },
+    { role: "article", xMin: 72, xMax: 145 },
+    { role: "description", xMin: 140, xMax: 360 },
+    { role: "quantity", xMin: 360, xMax: 395 },
+    { role: "unit", xMin: 390, xMax: 430 },
+    { role: "unitPrice", xMin: 425, xMax: 478 },
+    { role: "lineTotal", xMin: 510, xMax: 570 },
+  ],
+  descriptionCatchAllMaxX: 360,
+  skipLine: /^(pos\.|art-nr|übertrag|zwischensumme|gesamt|in eur$)/i,
+  minY: 480,
+};

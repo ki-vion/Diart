@@ -9,6 +9,7 @@ import { extractTableItems } from "../table/extract-table";
 import { allAsTextLines } from "./lines";
 import { detectProfile } from "./detect-profile";
 import { extractMahler } from "./extract-mahler";
+import { extractKoelnsperger } from "./extract-koelnsperger";
 import { extractNorit } from "./extract-norit";
 import { extractRkStark } from "./extract-rk";
 import { assignSequentialPositions } from "../assign-positions";
@@ -54,6 +55,8 @@ export function extractByProfile(
     }
     case "Bauwaren Mahler":
       return extractMahler(structured, source_pdf);
+    case "Kölnsperger":
+      return extractKoelnsperger(structured, source_pdf);
     case "generic":
       return extractTableItems(structured, source_pdf);
   }

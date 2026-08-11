@@ -30,6 +30,8 @@ export type ConvertResponse = {
   outputFileName?: string;
 };
 
+import { computeLineGesamt } from "../export/format-money";
+
 const MWST_RATE = 0.19;
 
 function vkAndGesamt(
@@ -44,9 +46,7 @@ function vkAndGesamt(
   const einzelpreisPdf = item.unit_price ?? null;
   const vk =
     menge !== null && einzelpreisPdf !== null ? einzelpreisPdf * (1 + aufschlag) : null;
-  const pricePer = item.price_per ?? 1;
-  const gesamt =
-    menge !== null && vk !== null ? (menge * vk) / pricePer : null;
+  const gesamt = computeLineGesamt(menge, vk, item.price_per ?? 1);
   return { vk, gesamt };
 }
 

@@ -82,6 +82,32 @@ describe("buildExcelBuffer", () => {
     expect(sheet.getRow(2).getCell(7).numFmt).toBe(EXCEL_EURO_NUMFMT);
   });
 
+  it("uses multiplier formula when price_per is below 1", async () => {
+    const result: ExtractionResult = {
+      layout_id: "Kölnsperger",
+      source_pdf: "test.pdf",
+      items: [
+        {
+          position: "9",
+          article_number: "D9203",
+          artikel_prefix: null,
+          description: "Fracht",
+          quantity: 3167,
+          unit: "‰ST",
+          unit_price: 180,
+          line_total: 570.06,
+          price_per: 0.001,
+        },
+      ],
+    };
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(await buildExcelBuffer(result, { aufschlag: 0 })));
+    const row2 = wb.worksheets[0]!.getRow(2);
+    expect(row2.getCell(5).formula).toBe("D2*B2*0.001");
+    expect(row2.getCell(5).result).toBeCloseTo(570.06, 2);
+  });
+
   it("divides Gesamt by price_per when set", async () => {
     const result: ExtractionResult = {
       layout_id: "Rudolf Laier GmbH",

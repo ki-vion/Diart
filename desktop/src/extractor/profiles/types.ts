@@ -4,4 +4,5 @@ export type PdfProfile =
   | "RAAB Karcher"
   | "Rudolf Laier GmbH"
   | "Bauwaren Mahler"
+  | "Kölnsperger"
   | "generic";

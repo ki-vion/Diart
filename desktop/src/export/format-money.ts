@@ -42,3 +42,22 @@ export function excelQuantityNumFmt(value: number): string {
     ? EXCEL_QUANTITY_INTEGER_NUMFMT
     : EXCEL_QUANTITY_NUMFMT;
 }
+
+/** Line total from quantity × marked-up unit price, with optional per-thousand divisor or multiplier. */
+export function computeLineGesamt(
+  quantity: number | null,
+  unitPriceWithMarkup: number | null,
+  pricePer: number | null = 1,
+): number | null {
+  if (quantity === null || unitPriceWithMarkup === null) return null;
+  const pp = pricePer ?? 1;
+  if (pp >= 1) return (quantity * unitPriceWithMarkup) / pp;
+  return quantity * unitPriceWithMarkup * pp;
+}
+
+export function gesamtExcelFormula(rowIndex: number, pricePer: number | null | undefined): string {
+  const pp = pricePer ?? 1;
+  if (pp === 1) return `D${rowIndex}*B${rowIndex}`;
+  if (pp >= 1) return `D${rowIndex}*B${rowIndex}/${pp}`;
+  return `D${rowIndex}*B${rowIndex}*${pp}`;
+}

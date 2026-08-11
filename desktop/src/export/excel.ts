@@ -2,9 +2,11 @@ import ExcelJS from "exceljs";
 import type { ExtractionResult } from "../extractor/models";
 import { formatArtikelCell, formatEinheitCell } from "./format-artikel";
 import {
+  computeLineGesamt,
   EXCEL_EURO_NUMFMT,
   EXCEL_QUANTITY_INTEGER_NUMFMT,
   excelQuantityNumFmt,
+  gesamtExcelFormula,
 } from "./format-money";
 
 export type BuildExcelOptions = {
@@ -127,12 +129,8 @@ export async function buildExcelBuffer(
     const vk =
       menge !== null && einzelpreisPdf !== null ? einzelpreisPdf * (1 + aufschlagFactor) : null;
     const pricePer = item.price_per ?? 1;
-    const gesamt =
-      menge !== null && vk !== null ? (menge * vk) / pricePer : null;
-    const gesamtFormula =
-      pricePer > 1
-        ? `D${rowIndex}*B${rowIndex}/${pricePer}`
-        : `D${rowIndex}*B${rowIndex}`;
+    const gesamt = computeLineGesamt(menge, vk, pricePer);
+    const gesamtFormula = gesamtExcelFormula(rowIndex, item.price_per);
 
     const row = sheet.addRow([
       formatArtikelCell(item, { layoutId: result.layout_id }),

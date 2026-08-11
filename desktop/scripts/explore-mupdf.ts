@@ -14,7 +14,11 @@ import { loadMupdf } from "./lib/mupdf-node.js";
 import { detectProfile } from "../src/extractor/profiles/detect-profile.js";
 import { extractByProfile } from "../src/extractor/profiles/index.js";
 import { calibrateColumnWindows, lineToCells, trimCells } from "../src/extractor/pipeline/columns.js";
-import { NORIT_TEMPLATE, RK_STARK_TEMPLATE } from "../src/extractor/pipeline/templates.js";
+import {
+  KOELNSPERGER_TEMPLATE,
+  NORIT_TEMPLATE,
+  RK_STARK_TEMPLATE,
+} from "../src/extractor/pipeline/templates.js";
 import type { PdfProfile } from "../src/extractor/profiles/types.js";
 import type { TableTemplate } from "../src/extractor/pipeline/types.js";
 import { noritLineToCells } from "../src/extractor/table/norit-structured.js";
@@ -35,6 +39,8 @@ function templateForProfile(profile: PdfProfile): TableTemplate | null {
       return RK_STARK_TEMPLATE;
     case "Norit":
       return NORIT_TEMPLATE;
+    case "Kölnsperger":
+      return KOELNSPERGER_TEMPLATE;
     default:
       return null;
   }
