@@ -22,8 +22,8 @@ function textLine(y: number, text: string, x = 40): PdfLine {
   return { y, words, text };
 }
 
-function wordLine(y: number, specs: { t: string; x: number }[]): PdfLine {
-  const words = specs.map((s) => ({ text: s.t, x: s.x, y, fontSize: 10 }));
+function wordLine(y: number, specs: { t: string; x: number; fontSize?: number }[]): PdfLine {
+  const words = specs.map((s) => ({ text: s.t, x: s.x, y, fontSize: s.fontSize ?? 10 }));
   return { y, words, text: words.map((w) => w.text).join(" ") };
 }
 
@@ -295,6 +295,71 @@ describe("parseLaierColumnBlock", () => {
     expect(item?.vk_discount_percent).toBe(4);
     expect(item?.price_per).toBe(100);
   });
+
+  it("drops page-footer Rudolf Laier GmbH from description", () => {
+    const item = parseLaierColumnBlock(
+      [
+        wordLine(560, [{ t: "44051405", x: 42.52 }]),
+        wordLine(572, [
+          { t: "Fugenspachtel", x: 42.52 },
+          { t: "Uniflott", x: 110 },
+          { t: "impr.", x: 150 },
+          { t: "5", x: 180 },
+          { t: "kg", x: 195 },
+        ]),
+        wordLine(572, [{ t: "136", x: 339.52 }]),
+        wordLine(572, [{ t: "Sack", x: 353.49 }]),
+        wordLine(572, [{ t: "12,00", x: 420.95 }]),
+        wordLine(572, [{ t: "1632,00", x: 532.84 }]),
+        wordLine(584, [
+          { t: "136", x: 42.52 },
+          { t: "Sack", x: 55 },
+          { t: "(à", x: 80 },
+          { t: "1", x: 95 },
+          { t: "Sack)", x: 110 },
+        ]),
+        wordLine(798, [
+          { t: "Rudolf", x: 42.52, fontSize: 6 },
+          { t: "Laier", x: 80, fontSize: 6 },
+          { t: "GmbH", x: 110, fontSize: 6 },
+        ]),
+      ],
+      ctx,
+    );
+    expect(item?.article_number).toBe("44051405");
+    expect(item?.description).toContain("Fugenspachtel");
+    expect(item?.description).toContain("136 Sack (à 1 Sack)");
+    expect(item?.description).not.toContain("Rudolf Laier GmbH");
+  });
+
+  it("drops small-type page-footer lines from description", () => {
+    const item = parseLaierColumnBlock(
+      [
+        wordLine(560, [{ t: "44051405", x: 42.52 }]),
+        wordLine(572, [{ t: "Fugenspachtel", x: 42.52 }]),
+        wordLine(572, [{ t: "136", x: 339.52 }]),
+        wordLine(572, [{ t: "Sack", x: 353.49 }]),
+        wordLine(572, [{ t: "12,00", x: 420.95 }]),
+        wordLine(572, [{ t: "1632,00", x: 532.84 }]),
+        wordLine(584, [
+          { t: "136", x: 42.52 },
+          { t: "Sack", x: 55 },
+          { t: "(à", x: 80 },
+          { t: "1", x: 95 },
+          { t: "Sack)", x: 110 },
+        ]),
+        wordLine(798, [
+          { t: "Am", x: 42.52, fontSize: 6 },
+          { t: "Bild", x: 70, fontSize: 6 },
+          { t: "1", x: 100, fontSize: 6 },
+        ]),
+      ],
+      ctx,
+    );
+    expect(item?.description).toContain("Fugenspachtel");
+    expect(item?.description).toContain("136 Sack (à 1 Sack)");
+    expect(item?.description).not.toContain("Am Bild");
+  });
 });
 
 describe("parseLaierBlock", () => {
@@ -332,6 +397,20 @@ describe("parseLaierBlock", () => {
     expect(item?.article_number).toBe("44053203");
     expect(item?.price_per).toBe(1000);
     expect(item?.description).toContain("(Preis per 1.000)");
+  });
+
+  it("drops page-footer Rudolf Laier GmbH from description", () => {
+    const item = parseLaierBlock([
+      "44051405",
+      "Fugenspachtel Uniflott impr. 5 kg",
+      "136 Sack",
+      "12,00",
+      "1632,00",
+      "Rudolf Laier GmbH",
+    ]);
+    expect(item?.article_number).toBe("44051405");
+    expect(item?.description).toContain("Fugenspachtel Uniflott");
+    expect(item?.description).not.toContain("Rudolf Laier GmbH");
   });
 
   it("parses split Menge and Einheit lines", () => {

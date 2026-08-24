@@ -48,10 +48,10 @@ export function isPageImprintLine(line: PdfLine, pageHeight: number): boolean {
   if (!text) return true;
 
   const font = lineAvgFontSize(line);
-  const xMin = lineXMin(line);
   const smallType = font <= 6.75;
   const bottomBand = line.y >= pageHeight * 0.88;
-  if (bottomBand && smallType && xMin > 90) return true;
+  // Laier footer is left-aligned (~x=42); RK imprint is centered. Y+size is enough.
+  if (bottomBand && smallType) return true;
 
   const topBand = line.y <= pageHeight * 0.22;
   if (topBand && smallType && (IMPRINT.test(text) || PAGE_HEADER.test(text))) {

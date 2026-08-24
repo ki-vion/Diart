@@ -351,7 +351,7 @@ function readFieldsFromCells(
 export { findTableRegion, findTableRegionOrContinuation, type TableRegion } from "./table-region";
 
 export function extractBlocksFromPage(
-  page: { lines: PdfLine[] },
+  page: { lines: PdfLine[]; height?: number },
   region: {
     dataStartIndex: number;
     dataEndIndex: number;
@@ -384,7 +384,7 @@ export function extractBlocksFromPage(
     const anchorLine = page.lines[start]!;
     const rawBlock = trimBlockLines(
       [anchorLine, ...page.lines.slice(start + 1, end)],
-      { windows: parseCtx?.columnBlock?.windows },
+      { windows: parseCtx?.columnBlock?.windows, pageHeight: page.height },
     );
 
     const { parseLines, carryToNext } = splitBlockLinesForParsing(rawBlock);

@@ -8,6 +8,7 @@ import {
   isBlockTerminatorLine,
   isPlausibleDescriptionLine,
 } from "./line-guards";
+import { isPageImprintLine } from "./table-zone";
 
 /** 8-digit numeric article or R-code surcharge row (e.g. R000008 *). */
 export const LAIER_ARTICLE_HEAD = /^(?<id>\d{8})\b|^(?<rcode>R\d{6})\s*\*/;
@@ -17,10 +18,13 @@ const PRICE_LINE = /^(?<price>[\d.,]+)(?:\s+-{1,2}\s*\d+\s*%)?$/;
 const TOTAL_PARENS = /^\((?<total>[\d.,]+)\)$/;
 
 const SKIP_LINE = /^(artikel$|menge\s+einheit|vk-preis|betrag$|sonstiges)/i;
+/** Repeating page footer; last item on a page otherwise swallows it as Artikel text. */
+const LAIER_PAGE_IMPRINT = /^Rudolf\s+Laier\s+GmbH\b/i;
 const LAIER_ALTERNATIV_TAG = /\(Alternativposition\)/i;
 const PREIS_PER_LINE = /\(\s*Preis\s+per\s+([\d.,]+)(?:\s+[A-Za-zÄÖÜäöüß.]+)?\s*\)/i;
 const LAIER_BILLING_UNIT_FALLBACK =
   /^(Sack|Stück|Stk\.?|ltr|m²|m2|m|Kanister|Pal\.?|Bund|Rolle?(?:\(n\))?)$/i;
+const DEFAULT_PAGE_HEIGHT = 842;
 
 export function extractLaierArticleId(text: string): string | null {
   const t = text.trim();
@@ -64,6 +68,7 @@ export function isLaierSkipLine(text: string): boolean {
   const t = text.trim();
   if (!t) return true;
   if (SKIP_LINE.test(t)) return true;
+  if (LAIER_PAGE_IMPRINT.test(t)) return true;
   if (isVkDiscountToken(t)) return true;
   return false;
 }
@@ -353,6 +358,7 @@ export function parseLaierColumnBlock(
     const line = lines[i]!;
     const text = line.text.trim();
     if (!text) continue;
+    if (isPageImprintLine(line, DEFAULT_PAGE_HEIGHT)) break;
     if (isBlockTerminatorLine(text)) break;
     if (i > 0 && extractLaierArticleId(text)) break;
     if (text === "²") continue;
@@ -453,7 +459,7 @@ export function parseLaierBlock(texts: string[]): LineItem | null {
   for (let i = 1; i < texts.length; i++) {
     const t = texts[i]!.trim();
     if (!t) continue;
-    if (extractLaierArticleId(t)) break;
+    if (extractLaierArticleId(t) || LAIER_PAGE_IMPRINT.test(t)) break;
 
     const vkDiscountPercent = parseLaierVkDiscountPercent(t);
     if (vkDiscountPercent !== null) {

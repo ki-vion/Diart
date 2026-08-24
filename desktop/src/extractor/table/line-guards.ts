@@ -1,6 +1,6 @@
 import type { PdfLine, PdfWord } from "../../pdf/types";
 import type { ColumnWindow } from "../pipeline/types";
-import { isPostTableText } from "./table-zone";
+import { isPageImprintLine, isPostTableText } from "./table-zone";
 
 const BILLING_ROLES = ["quantity", "unit", "unitPrice", "lineTotal"] as const;
 const PRICE_ROLES = ["unitPrice", "lineTotal"] as const;
@@ -141,12 +141,14 @@ export function shouldStopBlockAtLine(line: PdfLine, windows: ColumnWindow[]): b
 
 export function trimBlockLines(
   lines: PdfLine[],
-  options?: { windows?: ColumnWindow[] },
+  options?: { windows?: ColumnWindow[]; pageHeight?: number },
 ): PdfLine[] {
+  const pageHeight = options?.pageHeight ?? 842;
   const out: PdfLine[] = [];
   for (const line of lines) {
     const text = line.text.trim();
     if (!text) continue;
+    if (isPageImprintLine(line, pageHeight)) break;
     if (isBlockTerminatorLine(text)) break;
     if (options?.windows?.length && shouldStopBlockAtLine(line, options.windows)) break;
     out.push(line);
