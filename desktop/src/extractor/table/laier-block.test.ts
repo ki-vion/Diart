@@ -9,6 +9,7 @@ import {
   isLaierItemAnchor,
   parseLaierBlock,
   parseLaierColumnBlock,
+  parsePreisPerLine,
 } from "./laier-block";
 
 function textLine(y: number, text: string, x = 40): PdfLine {
@@ -25,6 +26,22 @@ function wordLine(y: number, specs: { t: string; x: number }[]): PdfLine {
   const words = specs.map((s) => ({ text: s.t, x: s.x, y, fontSize: 10 }));
   return { y, words, text: words.map((w) => w.text).join(" ") };
 }
+
+describe("parsePreisPerLine", () => {
+  it("reads Preis per 100", () => {
+    expect(parsePreisPerLine(" ( Preis per 100 )")).toEqual({
+      factor: 100,
+      label: "(Preis per 100)",
+    });
+  });
+
+  it("reads Preis per 1.000 Stück", () => {
+    expect(parsePreisPerLine("( Preis per 1.000 Stück )")).toEqual({
+      factor: 1000,
+      label: "(Preis per 1.000)",
+    });
+  });
+});
 
 describe("extractLaierArticleId", () => {
   it("reads 8-digit ids and R surcharge codes", () => {
@@ -275,6 +292,7 @@ describe("parseLaierColumnBlock", () => {
     expect(item?.quantity).toBe(1100);
     expect(item?.unit).toBe("Stück");
     expect(item?.unit_price).toBe(40.5);
+    expect(item?.vk_discount_percent).toBe(4);
     expect(item?.price_per).toBe(100);
   });
 });
@@ -295,10 +313,25 @@ describe("parseLaierBlock", () => {
     expect(item?.description).toContain("(Preis per 100)");
     expect(item?.description).not.toContain("--4");
     expect(item?.price_per).toBe(100);
+    expect(item?.vk_discount_percent).toBe(4);
     expect(item?.quantity).toBe(2.5);
     expect(item?.unit).toBe("m");
     expect(item?.unit_price).toBe(428.4);
     expect(item?.line_total).toBe(10.28);
+  });
+
+  it("sets price_per from Preis per 1.000 Stück", () => {
+    const item = parseLaierBlock([
+      "44053203",
+      " ( Preis per 1.000 Stück )",
+      "WDVS-Dübel",
+      "2.000 Stück",
+      "85,00 --4 %",
+      "(163,20)",
+    ]);
+    expect(item?.article_number).toBe("44053203");
+    expect(item?.price_per).toBe(1000);
+    expect(item?.description).toContain("(Preis per 1.000)");
   });
 
   it("parses split Menge and Einheit lines", () => {

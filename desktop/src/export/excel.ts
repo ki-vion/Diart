@@ -16,13 +16,14 @@ export type BuildExcelOptions = {
   aufschlag: number;
 };
 
-/** Materialliste export columns (A–H, F empty). */
+/** Materialliste export columns (A–I, G empty spacer). */
 export const MATERIALLISTE_HEADERS = [
   "Artikel",
   "Menge",
   "Einheit",
   "Einzelpreis (€)",
   "Gesamt (€)",
+  "Rabatt (%)",
   "",
   "Einzelpreis PDF (€)",
   "Aufschlag",
@@ -44,7 +45,7 @@ function applyDataRowFormats(row: ExcelJS.Row): void {
   }
   row.getCell(4).numFmt = EXCEL_EURO_NUMFMT;
   row.getCell(5).numFmt = EXCEL_EURO_NUMFMT;
-  row.getCell(7).numFmt = EXCEL_EURO_NUMFMT;
+  row.getCell(8).numFmt = EXCEL_EURO_NUMFMT;
 }
 
 function applyEuroFooterCell(cell: ExcelJS.Cell): void {
@@ -68,6 +69,7 @@ function addSummaryFooters(sheet: ExcelJS.Worksheet, firstDataRow: number, lastD
     null,
     null,
     null,
+    null,
   ]);
   applyEuroFooterCell(nettoRow.getCell(5));
 
@@ -81,6 +83,7 @@ function addSummaryFooters(sheet: ExcelJS.Worksheet, firstDataRow: number, lastD
     null,
     null,
     null,
+    null,
   ]);
   applyEuroFooterCell(mwstRow.getCell(5));
 
@@ -90,6 +93,7 @@ function addSummaryFooters(sheet: ExcelJS.Worksheet, firstDataRow: number, lastD
     null,
     "Gesamtbetrag",
     { formula: `ROUND(E${nettoRowNum}+E${mwstRowNum},2)` },
+    null,
     null,
     null,
     null,
@@ -114,7 +118,7 @@ export async function buildExcelBuffer(
   sheet.getColumn(2).numFmt = EXCEL_QUANTITY_INTEGER_NUMFMT;
   sheet.getColumn(4).numFmt = EXCEL_EURO_NUMFMT;
   sheet.getColumn(5).numFmt = EXCEL_EURO_NUMFMT;
-  sheet.getColumn(7).numFmt = EXCEL_EURO_NUMFMT;
+  sheet.getColumn(8).numFmt = EXCEL_EURO_NUMFMT;
 
   const aufschlagFactor = opts.aufschlag ?? 0;
   const firstDataRow = 2;
@@ -125,20 +129,28 @@ export async function buildExcelBuffer(
 
     const menge = item.quantity ?? null;
     const einzelpreisPdf = item.unit_price ?? null;
+    const vkDiscountPercent = item.vk_discount_percent ?? null;
 
     const vk =
       menge !== null && einzelpreisPdf !== null ? einzelpreisPdf * (1 + aufschlagFactor) : null;
+    const vkDiscountFactor = 1 - (vkDiscountPercent ?? 0) / 100;
+    const vkNet = vk !== null ? vk * vkDiscountFactor : null;
     const pricePer = item.price_per ?? 1;
-    const gesamt = computeLineGesamt(menge, vk, pricePer);
+    const gesamt = computeLineGesamt(menge, vkNet, pricePer);
     const gesamtFormula = gesamtExcelFormula(rowIndex, item.price_per);
 
+    const rabatCellValue = vkDiscountPercent ?? null;
     const row = sheet.addRow([
       formatArtikelCell(item, { layoutId: result.layout_id }),
       menge,
       formatEinheitCell(item.unit, item.description),
-      { formula: `G${rowIndex}*(1+H${rowIndex})`, result: vk ?? undefined },
+      {
+        formula: `H${rowIndex}*(1+I${rowIndex})*(1-F${rowIndex}/100)`,
+        result: vkNet ?? undefined,
+      },
       { formula: gesamtFormula, result: gesamt ?? undefined },
-      null,
+      rabatCellValue,
+      null, // spacer column
       einzelpreisPdf,
       aufschlagFactor,
     ]);

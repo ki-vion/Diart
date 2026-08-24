@@ -8,6 +8,11 @@ export type LineItem = {
   unit: string | null;
   unit_price: number | null;
   line_total: number | null;
+  /**
+   * VK-Rabatt aus der VK-Preis Spalte, z.B. parsed aus „--10 %“ => 10.
+   * Wird für die Excel-Gesamtberechnung verwendet.
+   */
+  vk_discount_percent?: number | null;
   /** Divisor for unit price basis, e.g. 100 for „(Preis per 100)“. */
   price_per?: number | null;
 };

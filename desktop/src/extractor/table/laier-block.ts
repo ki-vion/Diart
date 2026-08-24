@@ -18,7 +18,7 @@ const TOTAL_PARENS = /^\((?<total>[\d.,]+)\)$/;
 
 const SKIP_LINE = /^(artikel$|menge\s+einheit|vk-preis|betrag$|sonstiges)/i;
 const LAIER_ALTERNATIV_TAG = /\(Alternativposition\)/i;
-const PREIS_PER_LINE = /\(\s*Preis\s+per\s+(\d+)\s*\)/i;
+const PREIS_PER_LINE = /\(\s*Preis\s+per\s+([\d.,]+)(?:\s+[A-Za-zÄÖÜäöüß.]+)?\s*\)/i;
 const LAIER_BILLING_UNIT_FALLBACK =
   /^(Sack|Stück|Stk\.?|ltr|m²|m2|m|Kanister|Pal\.?|Bund|Rolle?(?:\(n\))?)$/i;
 
@@ -50,9 +50,14 @@ function descriptionHasAlternativTag(description: string): boolean {
 export function parsePreisPerLine(text: string): { factor: number; label: string } | null {
   const m = PREIS_PER_LINE.exec(text.trim());
   if (!m?.[1]) return null;
-  const factor = Number.parseInt(m[1], 10);
+  const factor = parseDeNumber(m[1]);
+  if (factor === null) return null;
   if (!Number.isFinite(factor) || factor <= 0) return null;
-  return { factor, label: `(Preis per ${factor})` };
+  const labelFactor = new Intl.NumberFormat("de-DE", {
+    maximumFractionDigits: 3,
+    useGrouping: true,
+  }).format(factor);
+  return { factor, label: `(Preis per ${labelFactor})` };
 }
 
 export function isLaierSkipLine(text: string): boolean {
@@ -65,10 +70,10 @@ export function isLaierSkipLine(text: string): boolean {
 
 function isLaierQtyLine(text: string): boolean {
   const t = text.trim();
-  if (t.includes("--")) return false;
+  if (lineHasVkDiscount(t)) return false;
   if (QTY_UNIT_LINE.test(t)) {
     const unit = QTY_UNIT_LINE.exec(t)?.groups?.unit?.trim() ?? "";
-    if (!unit || /^--/.test(unit)) return false;
+    if (!unit || lineHasVkDiscount(unit)) return false;
     return true;
   }
   return /^[\d.,]+\s*(m²|m2|m|ltr|Stück|Stk|Sack)\b/i.test(t);
@@ -80,6 +85,14 @@ function isLaierPriceLine(text: string): boolean {
 
 function lineHasVkDiscount(text: string): boolean {
   return /-{1,2}\s*\d+\s*%/.test(text.trim());
+}
+
+function parseLaierVkDiscountPercent(text: string): number | null {
+  const m = /-{1,2}\s*(?<pct>[\d.,]+)\s*%/.exec(text.trim());
+  if (!m?.groups?.pct) return null;
+  const pct = parseDeNumber(m.groups.pct);
+  if (pct === null || !Number.isFinite(pct) || pct <= 0) return null;
+  return pct;
 }
 
 function hasSquareMeterSuperscriptOnSameY(lines: PdfLine[], y: number): boolean {
@@ -304,6 +317,7 @@ function reconcileLaierRowPrices(
     if (row.length < 2) continue;
     row.sort((a, b) => a.x - b.x);
     item.unit_price ??= row[0]!.n;
+    // ponytail: spatial x-order is authoritative over column bands when VK-Preis band is squeezed.
     item.line_total = row[row.length - 1]!.n;
   }
 }
@@ -328,6 +342,7 @@ export function parseLaierColumnBlock(
     unit: null,
     unit_price: null,
     line_total: null,
+    vk_discount_percent: null,
     price_per: null,
   };
 
@@ -347,6 +362,11 @@ export function parseLaierColumnBlock(
       item.price_per ??= preisPer.factor;
       preisPerLabels.push(preisPer.label);
       continue;
+    }
+
+    const vkDiscountPercent = parseLaierVkDiscountPercent(text);
+    if (vkDiscountPercent !== null) {
+      item.vk_discount_percent ??= vkDiscountPercent;
     }
 
     if (isLaierSkipLine(text)) continue;
@@ -427,12 +447,18 @@ export function parseLaierBlock(texts: string[]): LineItem | null {
   let unit_price: number | null = null;
   let line_total: number | null = null;
   let price_per: number | null = null;
+  let vk_discount_percent: number | null = null;
   const barePrices: number[] = [];
 
   for (let i = 1; i < texts.length; i++) {
     const t = texts[i]!.trim();
     if (!t) continue;
     if (extractLaierArticleId(t)) break;
+
+    const vkDiscountPercent = parseLaierVkDiscountPercent(t);
+    if (vkDiscountPercent !== null) {
+      vk_discount_percent ??= vkDiscountPercent;
+    }
 
     const preisPer = parsePreisPerLine(t);
     if (preisPer) {
@@ -524,6 +550,7 @@ export function parseLaierBlock(texts: string[]): LineItem | null {
     unit,
     unit_price,
     line_total,
+    vk_discount_percent,
     price_per,
   };
   finalizeLaierItem(item, preisPerLabels);

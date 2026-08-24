@@ -6,6 +6,7 @@ export type PreviewRow = {
   Einheit: string | null;
   "Einzelpreis (€)": number | null;
   "Gesamt (€)": number | null;
+  "Rabatt (%)": number | null;
   "Einzelpreis PDF (€)": number | null;
   Aufschlag: number;
 };
@@ -39,6 +40,7 @@ function vkAndGesamt(
     quantity: number | null;
     unit_price: number | null;
     price_per?: number | null;
+    vk_discount_percent?: number | null;
   },
   aufschlag: number,
 ): { vk: number | null; gesamt: number | null } {
@@ -46,8 +48,10 @@ function vkAndGesamt(
   const einzelpreisPdf = item.unit_price ?? null;
   const vk =
     menge !== null && einzelpreisPdf !== null ? einzelpreisPdf * (1 + aufschlag) : null;
-  const gesamt = computeLineGesamt(menge, vk, item.price_per ?? 1);
-  return { vk, gesamt };
+  const vkDiscountFactor = 1 - (item.vk_discount_percent ?? 0) / 100;
+  const vkNet = vk !== null ? vk * vkDiscountFactor : null;
+  const gesamt = computeLineGesamt(menge, vkNet, item.price_per ?? 1);
+  return { vk: vkNet, gesamt };
 }
 
 function round2(value: number): number {
@@ -83,6 +87,7 @@ function toPreviewRows(
     unit: string | null;
     unit_price: number | null;
     price_per?: number | null;
+    vk_discount_percent?: number | null;
   }>,
   aufschlag: number,
   layoutId?: string,
@@ -98,6 +103,7 @@ function toPreviewRows(
       Einheit: formatEinheitCell(item.unit, item.description) || null,
       "Einzelpreis (€)": vk,
       "Gesamt (€)": gesamt,
+      "Rabatt (%)": item.vk_discount_percent ?? null,
       "Einzelpreis PDF (€)": einzelpreisPdf,
       Aufschlag: aufschlag,
     };

@@ -56,10 +56,12 @@ describe("buildExcelBuffer", () => {
 
     const row2 = sheet.getRow(2);
     expect(row2.getCell(1).value).toBe("A-1\nTest");
+    // New layout: F = VK-Rabatt, G = intentionally empty spacer, H = Einzelpreis PDF, I = Aufschlag
     expect(row2.getCell(6).value).toBeNull();
-    expect(row2.getCell(7).value).toBe(10);
-    expect(row2.getCell(8).value).toBe(0.2);
-    expect(row2.getCell(4).formula).toBe("G2*(1+H2)");
+    expect(row2.getCell(7).value).toBeNull();
+    expect(row2.getCell(8).value).toBe(10);
+    expect(row2.getCell(9).value).toBe(0.2);
+    expect(row2.getCell(4).formula).toBe("H2*(1+I2)*(1-F2/100)");
     expect(row2.getCell(5).formula).toBe("D2*B2");
 
     expect(sheet.getRow(1).getCell(1).font?.bold).toBe(true);
@@ -67,7 +69,7 @@ describe("buildExcelBuffer", () => {
     expect(sheet.getColumn(2).numFmt).toBe(EXCEL_QUANTITY_INTEGER_NUMFMT);
     expect(sheet.getColumn(4).numFmt).toBe(EXCEL_EURO_NUMFMT);
     expect(sheet.getColumn(5).numFmt).toBe(EXCEL_EURO_NUMFMT);
-    expect(sheet.getColumn(7).numFmt).toBe(EXCEL_EURO_NUMFMT);
+    expect(sheet.getColumn(8).numFmt).toBe(EXCEL_EURO_NUMFMT);
 
     expect(sheet.getRow(5).getCell(4).value).toBe("Gesamt Netto");
     expect(sheet.getRow(5).getCell(5).formula).toBe("ROUND(SUM(E2:E2),2)");
@@ -79,7 +81,7 @@ describe("buildExcelBuffer", () => {
     expect(sheet.getRow(2).getCell(2).numFmt).toBe(EXCEL_QUANTITY_INTEGER_NUMFMT);
     expect(sheet.getRow(2).getCell(4).numFmt).toBe(EXCEL_EURO_NUMFMT);
     expect(sheet.getRow(2).getCell(5).numFmt).toBe(EXCEL_EURO_NUMFMT);
-    expect(sheet.getRow(2).getCell(7).numFmt).toBe(EXCEL_EURO_NUMFMT);
+    expect(sheet.getRow(2).getCell(8).numFmt).toBe(EXCEL_EURO_NUMFMT);
   });
 
   it("uses multiplier formula when price_per is below 1", async () => {
@@ -122,6 +124,7 @@ describe("buildExcelBuffer", () => {
           unit: "Stück",
           unit_price: 40.5,
           line_total: 427.68,
+          vk_discount_percent: 4,
           price_per: 100,
         },
       ],
@@ -131,7 +134,8 @@ describe("buildExcelBuffer", () => {
     await wb.xlsx.load(Buffer.from(await buildExcelBuffer(result, { aufschlag: 0 })));
     const row2 = wb.worksheets[0]!.getRow(2);
     expect(row2.getCell(5).formula).toBe("D2*B2/100");
-    expect(row2.getCell(5).result).toBeCloseTo(445.5, 2);
+    // 40.5 discounted by 4% => 38.88; 1100 * 38.88 / 100 = 427.68
+    expect(row2.getCell(5).result).toBeCloseTo(427.68, 2);
   });
 
   it("uses integer quantity format for whole numbers (no trailing comma in de-DE Excel)", async () => {
