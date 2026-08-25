@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import type { ExtractionResult } from "../extractor/models";
+import { formatAlternativeGesamtText, isAlternativeItem } from "./alternative-item";
 import { formatArtikelCell, formatEinheitCell } from "./format-artikel";
 import {
   computeLineGesamt,
@@ -137,7 +138,14 @@ export async function buildExcelBuffer(
     const vkNet = vk !== null ? vk * vkDiscountFactor : null;
     const pricePer = item.price_per ?? 1;
     const gesamt = computeLineGesamt(menge, vkNet, pricePer);
-    const gesamtFormula = gesamtExcelFormula(rowIndex, item.price_per);
+    const isAlternative = isAlternativeItem(item);
+    const gesamtCell =
+      isAlternative && gesamt !== null
+        ? formatAlternativeGesamtText(gesamt)
+        : {
+            formula: gesamtExcelFormula(rowIndex, item.price_per),
+            result: gesamt ?? undefined,
+          };
 
     const rabatCellValue = vkDiscountPercent ?? null;
     const row = sheet.addRow([
@@ -148,7 +156,7 @@ export async function buildExcelBuffer(
         formula: `H${rowIndex}*(1+I${rowIndex})*(1-F${rowIndex}/100)`,
         result: vkNet ?? undefined,
       },
-      { formula: gesamtFormula, result: gesamt ?? undefined },
+      gesamtCell,
       rabatCellValue,
       null, // spacer column
       einzelpreisPdf,

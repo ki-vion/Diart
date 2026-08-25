@@ -1,3 +1,4 @@
+import { formatAlternativeGesamtText, isAlternativeItem } from "../export/alternative-item";
 import { formatArtikelCell, formatEinheitCell } from "../export/format-artikel";
 
 export type PreviewRow = {
@@ -5,7 +6,7 @@ export type PreviewRow = {
   Menge: number | null;
   Einheit: string | null;
   "Einzelpreis (€)": number | null;
-  "Gesamt (€)": number | null;
+  "Gesamt (€)": number | string | null;
   "Rabatt (%)": number | null;
   "Einzelpreis PDF (€)": number | null;
   Aufschlag: number;
@@ -64,6 +65,7 @@ function computePreviewTotals(
 ): PreviewTotals {
   const netto = round2(
     items.reduce((sum, item) => {
+      if (isAlternativeItem(item)) return sum;
       const { gesamt } = vkAndGesamt(item, aufschlag);
       return sum + (gesamt ?? 0);
     }, 0),
@@ -97,12 +99,17 @@ function toPreviewRows(
     const einzelpreisPdf = item.unit_price ?? null;
     const { vk, gesamt } = vkAndGesamt(item, aufschlag);
 
+    const gesamtDisplay =
+      isAlternativeItem(item) && gesamt !== null
+        ? formatAlternativeGesamtText(gesamt)
+        : gesamt;
+
     return {
       Artikel: formatArtikelCell(item, { layoutId }),
       Menge: menge,
       Einheit: formatEinheitCell(item.unit, item.description) || null,
       "Einzelpreis (€)": vk,
-      "Gesamt (€)": gesamt,
+      "Gesamt (€)": gesamtDisplay,
       "Rabatt (%)": item.vk_discount_percent ?? null,
       "Einzelpreis PDF (€)": einzelpreisPdf,
       Aufschlag: aufschlag,

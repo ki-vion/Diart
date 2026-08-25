@@ -138,6 +138,48 @@ describe("buildExcelBuffer", () => {
     expect(row2.getCell(5).result).toBeCloseTo(427.68, 2);
   });
 
+  it("shows alternative positions in parentheses and excludes them from footer sum", async () => {
+    const result: ExtractionResult = {
+      layout_id: "Rudolf Laier GmbH",
+      source_pdf: "test.pdf",
+      items: [
+        {
+          position: "1",
+          article_number: "A-1",
+          artikel_prefix: null,
+          description: "Normalartikel",
+          quantity: 2,
+          unit: "Stk",
+          unit_price: 10,
+          line_total: 20,
+        },
+        {
+          position: "2",
+          article_number: "22508050",
+          artikel_prefix: null,
+          description: "(Alternativposition)\nSockeldämmplatte",
+          quantity: 1.5,
+          unit: "m²",
+          unit_price: 19.36,
+          line_total: null,
+        },
+      ],
+    };
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(await buildExcelBuffer(result, { aufschlag: 0.2 })));
+    const sheet = wb.worksheets[0]!;
+
+    expect(sheet.getRow(2).getCell(5).formula).toBe("D2*B2");
+    expect(sheet.getRow(2).getCell(5).result).toBeCloseTo(24, 2);
+
+    const altGesamt = sheet.getRow(4).getCell(5);
+    expect(altGesamt.formula).toBeUndefined();
+    expect(altGesamt.value).toBe("(34,85)");
+
+    expect(sheet.getRow(7).getCell(5).formula).toBe("ROUND(SUM(E2:E4),2)");
+  });
+
   it("uses integer quantity format for whole numbers (no trailing comma in de-DE Excel)", async () => {
     const result: ExtractionResult = {
       layout_id: "test",
