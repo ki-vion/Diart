@@ -163,4 +163,105 @@ describe("extractKoelnspergerItems", () => {
     expect(items[0]?.unit_price).toBe(12.72);
     expect(items[0]?.line_total).toBe(25.43);
   });
+
+  it("does not pull prior multi-line description into the next position", () => {
+    // Geometry from AN2026-0981: continuations ~13pt above next pos must stay on pos 1.
+    const yHeader = 403;
+    const lines: PdfLine[] = [
+      line(yHeader, [{ text: "Pos.", x: 60 }]),
+      line(yHeader, [{ text: "Art-Nr.", x: 82 }]),
+      line(yHeader, [{ text: "Artikel Bezeichnung", x: 150 }]),
+      line(yHeader, [{ text: "Mge.", x: 371 }]),
+      line(yHeader, [{ text: "Einh.", x: 402 }]),
+      line(yHeader, [{ text: "E-Preis (€)", x: 441 }]),
+      line(yHeader, [{ text: "Ges. Preis (€", x: 529 }]),
+      line(416, [{ text: "1.", x: 60 }]),
+      line(416, [{ text: "00000001097823", x: 82 }]),
+      line(416, [{ text: "NAH Holzf.Flex 220mm stumpf 038", x: 150 }]),
+      line(416, [{ text: "182,39", x: 364 }]),
+      line(416, [{ text: "m²", x: 403 }]),
+      line(416, [{ text: "14,74", x: 454 }]),
+      line(416, [{ text: "2.688,43", x: 529 }]),
+      line(426, [{ text: "1220x 575mm Holzfaserdpl.", x: 150 }]),
+      line(436, [{ text: "14,03m² / Pal", x: 150 }]),
+      line(446, [{ text: "= 13 Pal.", x: 150 }]),
+      line(459, [{ text: "2.", x: 60 }]),
+      line(459, [{ text: "00000001097819", x: 82 }]),
+      line(459, [{ text: "NAH Holzf.Flex 40mm stumpf 038", x: 150 }]),
+      line(459, [{ text: "159,98", x: 364 }]),
+      line(459, [{ text: "m²", x: 403 }]),
+      line(459, [{ text: "2,68", x: 459 }]),
+      line(459, [{ text: "428,75", x: 537 }]),
+      line(469, [{ text: "1220x 575mm Holzfaserdpl.", x: 150 }]),
+      line(479, [{ text: "84,18m² / Pal", x: 150 }]),
+      line(489, [{ text: "19 Pakete", x: 150 }]),
+    ];
+    const structured: PdfStructured = {
+      sourceFileName: "koelnsperger.pdf",
+      pages: [
+        {
+          index: 0,
+          width: 595,
+          height: 842,
+          lines,
+          rawText: "Kölnsperger Bedachungshandel GmbH\ninfo@koelnsperger-gmbh.de",
+        },
+      ],
+    };
+    const { items } = extractKoelnspergerItems(structured);
+    expect(items.length).toBe(2);
+    expect(items[0]?.description).toContain("= 13 Pal.");
+    expect(items[0]?.description).toContain("14,03m² / Pal");
+    expect(items[1]?.description).not.toContain("= 13 Pal.");
+    expect(items[1]?.description).not.toContain("14,03m² / Pal");
+    expect(items[1]?.description).toContain("NAH Holzf.Flex 40mm stumpf 038");
+    expect(items[1]?.description).toContain("19 Pakete");
+  });
+
+  it("keeps MuPDF preamble description that hugs the next position row", () => {
+    // Pos 6 geometry: title 1pt above the position anchor.
+    const yHeader = 403;
+    const lines: PdfLine[] = [
+      line(yHeader, [{ text: "Pos.", x: 60 }]),
+      line(yHeader, [{ text: "Art-Nr.", x: 82 }]),
+      line(yHeader, [{ text: "Artikel Bezeichnung", x: 150 }]),
+      line(yHeader, [{ text: "Mge.", x: 371 }]),
+      line(yHeader, [{ text: "Einh.", x: 402 }]),
+      line(yHeader, [{ text: "E-Preis (€)", x: 441 }]),
+      line(yHeader, [{ text: "Ges. Preis (€", x: 529 }]),
+      line(539, [{ text: "5.", x: 60 }]),
+      line(539, [{ text: "00000001760518", x: 82 }]),
+      line(539, [{ text: "ALJ Allfix 310ml", x: 150 }]),
+      line(539, [{ text: "12", x: 381 }]),
+      line(539, [{ text: "ST", x: 402 }]),
+      line(539, [{ text: "8,36", x: 459 }]),
+      line(539, [{ text: "100,32", x: 537 }]),
+      line(549, [{ text: "Kartusche", x: 150 }]),
+      line(561, [{ text: "Logistikpauschale ab 7,49 t LKW", x: 150 }]),
+      line(562, [{ text: "6.", x: 60 }]),
+      line(562, [{ text: "L-0002", x: 82 }]),
+      line(562, [{ text: "1", x: 386 }]),
+      line(562, [{ text: "ST", x: 402 }]),
+      line(562, [{ text: "55,00", x: 454 }]),
+      line(562, [{ text: "55,00", x: 542 }]),
+    ];
+    const structured: PdfStructured = {
+      sourceFileName: "koelnsperger.pdf",
+      pages: [
+        {
+          index: 0,
+          width: 595,
+          height: 842,
+          lines,
+          rawText: "Kölnsperger Bedachungshandel GmbH\ninfo@koelnsperger-gmbh.de",
+        },
+      ],
+    };
+    const { items } = extractKoelnspergerItems(structured);
+    expect(items.length).toBe(2);
+    expect(items[1]?.article_number).toBe("L-0002");
+    expect(items[1]?.description).toContain("Logistikpauschale ab 7,49 t LKW");
+    expect(items[0]?.description).toContain("Kartusche");
+    expect(items[0]?.description).not.toContain("Logistikpauschale");
+  });
 });

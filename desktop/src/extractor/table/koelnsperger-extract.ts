@@ -38,6 +38,8 @@ const RABATT_LINE = /^\d{1,2}%$/;
 const PRICE_NOTE = /^\(\/(?:\d+(?:[.,]\d+)?)\)$|^\(\*[\d.,]+\)$/;
 const BLOCK_END = /^(übertrag|uebertrag|zwischensumme|gesamt:)/i;
 const NUMERIC_ONLY = /^[\d.,]+$/;
+/** Only claim lookback desc lines that sit on/near the position row (MuPDF reorder). */
+const PREAMBLE_MAX_DY = 8;
 
 type MergedFields = Partial<Record<ColumnRole, string>>;
 
@@ -179,6 +181,7 @@ function collectPreambleDescription(
   region: Pick<TableRegion, "dataStartIndex">,
 ): string[] {
   const parts: string[] = [];
+  const anchorY = lines[start]!.y;
   const minIdx = Math.max(region.dataStartIndex, start - 4);
   for (let i = start - 1; i >= minIdx; i--) {
     const line = lines[i]!;
@@ -186,6 +189,8 @@ function collectPreambleDescription(
     if (!text || SKIP_LINE.test(text) || BLOCK_END.test(text)) break;
     if (KOELNSPERGER_POSITION_RE.test(text)) break;
     if (NUMERIC_ONLY.test(text) || RABATT_LINE.test(text) || PRICE_NOTE.test(text)) break;
+    // Prior item continuations sit further above; real MuPDF preambles hug the anchor.
+    if (anchorY - line.y > PREAMBLE_MAX_DY) break;
 
     const cells = trimCells(lineToCells(line, COL_WINDOWS, COL_CATCH_ALL));
     const desc = cells.description?.trim();
@@ -203,6 +208,15 @@ function collectPreambleDescription(
     }
   }
   return parts;
+}
+
+/** Desc lines that sit on/near the next position row belong to that item's preamble, not this block. */
+function isNextPositionPreamble(line: PdfLine, end: number, lines: PdfLine[]): boolean {
+  if (end >= lines.length) return false;
+  const nextText = lines[end]!.text.trim();
+  if (!KOELNSPERGER_POSITION_RE.test(nextText)) return false;
+  const dy = lines[end]!.y - line.y;
+  return dy >= 0 && dy <= PREAMBLE_MAX_DY;
 }
 
 function parseKoelnspergerBlock(
@@ -239,7 +253,8 @@ function parseKoelnspergerBlock(
       !KOELNSPERGER_POSITION_RE.test(desc) &&
       !looksLikeKoelnspergerArticle(desc) &&
       !NUMERIC_ONLY.test(desc) &&
-      !RABATT_LINE.test(desc)
+      !RABATT_LINE.test(desc) &&
+      !isNextPositionPreamble(line, end, lines)
     ) {
       if (!descParts.includes(desc)) descParts.push(desc);
     }
