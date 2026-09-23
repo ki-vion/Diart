@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PdfLine, PdfStructured } from "../../pdf/types";
 import { extractKoelnspergerItems } from "./koelnsperger-extract";
-import { KOELNSPERGER_POSITION_RE, looksLikeKoelnspergerArticle } from "./koelnsperger-anchors";
+import { KOELNSPERGER_POSITION_RE, isKoelnspergerArticleValue, looksLikeKoelnspergerArticle } from "./koelnsperger-anchors";
 
 function line(y: number, parts: Array<{ text: string; x: number }>): PdfLine {
   const words = parts.map((p) => ({ ...p, y, fontSize: 10 }));
@@ -22,6 +22,17 @@ describe("looksLikeKoelnspergerArticle", () => {
     expect(looksLikeKoelnspergerArticle("D9304")).toBe(true);
     expect(looksLikeKoelnspergerArticle("L-0002")).toBe(true);
     expect(looksLikeKoelnspergerArticle("252494")).toBe(false);
+  });
+});
+
+describe("isKoelnspergerArticleValue", () => {
+  it("accepts classic and free-form supplier codes", () => {
+    expect(isKoelnspergerArticleValue("00000002738308")).toBe(true);
+    expect(isKoelnspergerArticleValue("MT110-100ST-1.5")).toBe(true);
+    expect(isKoelnspergerArticleValue("AP")).toBe(true);
+    expect(isKoelnspergerArticleValue("BM-OSB15MM")).toBe(true);
+    expect(isKoelnspergerArticleValue("1.")).toBe(false);
+    expect(isKoelnspergerArticleValue("180")).toBe(false);
   });
 });
 
@@ -263,5 +274,60 @@ describe("extractKoelnspergerItems", () => {
     expect(items[1]?.description).toContain("Logistikpauschale ab 7,49 t LKW");
     expect(items[0]?.description).toContain("Kartusche");
     expect(items[0]?.description).not.toContain("Logistikpauschale");
+  });
+
+  it("anchors free-form article codes (MT/AP/BM) via row signal", () => {
+    const yHeader = 436;
+    const lines: PdfLine[] = [
+      line(yHeader, [{ text: "Pos.", x: 60 }]),
+      line(yHeader, [{ text: "Art-Nr.", x: 82 }]),
+      line(yHeader, [{ text: "Artikel Bezeichnung", x: 150 }]),
+      line(yHeader, [{ text: "Mge.", x: 371 }]),
+      line(yHeader, [{ text: "Einh.", x: 402 }]),
+      line(yHeader, [{ text: "E-Preis (€)", x: 441 }]),
+      line(yHeader, [{ text: "Ges. Preis (€", x: 529 }]),
+      line(449, [{ text: "1.", x: 60 }]),
+      line(449, [{ text: "MT110-100ST-1.5", x: 82 }]),
+      line(449, [{ text: "best wood MULTITHERM 110-100 stumpf", x: 150 }]),
+      line(449, [{ text: "180", x: 376 }]),
+      line(449, [{ text: "m²", x: 403 }]),
+      line(449, [{ text: "10,80", x: 454 }]),
+      line(449, [{ text: "1.944,00", x: 529 }]),
+      line(492, [{ text: "2.", x: 60 }]),
+      line(492, [{ text: "AP", x: 82 }]),
+      line(492, [{ text: "Anbruchpalette", x: 150 }]),
+      line(492, [{ text: "1", x: 386 }]),
+      line(492, [{ text: "ST", x: 402 }]),
+      line(492, [{ text: "25,00", x: 454 }]),
+      line(492, [{ text: "25,00", x: 542 }]),
+      line(506, [{ text: "3.", x: 60 }]),
+      line(506, [{ text: "00000002747125", x: 82 }]),
+      line(506, [{ text: "VEL GXU CK04", x: 150 }]),
+      line(506, [{ text: "2", x: 386 }]),
+      line(506, [{ text: "ST", x: 402 }]),
+      line(506, [{ text: "706,00", x: 449 }]),
+      line(506, [{ text: "1.002,52", x: 529 }]),
+    ];
+    const structured: PdfStructured = {
+      sourceFileName: "koelnsperger.pdf",
+      pages: [
+        {
+          index: 0,
+          width: 595,
+          height: 842,
+          lines,
+          rawText: "Kölnsperger Bedachungshandel GmbH\ninfo@koelnsperger-gmbh.de",
+        },
+      ],
+    };
+    const { items } = extractKoelnspergerItems(structured);
+    expect(items.map((i) => i.article_number)).toEqual([
+      "MT110-100ST-1.5",
+      "AP",
+      "00000002747125",
+    ]);
+    expect(items[0]?.position).toBe("1");
+    expect(items[0]?.quantity).toBe(180);
+    expect(items[1]?.description).toContain("Anbruchpalette");
   });
 });

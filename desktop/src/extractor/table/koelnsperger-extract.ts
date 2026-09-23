@@ -6,7 +6,8 @@ import type { ColumnRole, TableColumnMap } from "./header-map";
 import { findGenericTableEndIndex } from "./generic-extract";
 import {
   findKoelnspergerPositionAnchors,
-  hasKoelnspergerArticleNearAnchor,
+  hasKoelnspergerRowSignalNearAnchor,
+  isKoelnspergerArticleValue,
   KOELNSPERGER_POSITION_RE,
   looksLikeKoelnspergerArticle,
 } from "./koelnsperger-anchors";
@@ -91,7 +92,7 @@ function findKoelnspergerTableRegion(page: PdfPageStructured): TableRegion | nul
       boundaries: FIXED_BOUNDARIES,
       columnMap: FIXED_COLUMN_MAP,
     };
-    if (hasKoelnspergerArticleNearAnchor(lines, i, probe)) {
+    if (hasKoelnspergerRowSignalNearAnchor(lines, i, probe)) {
       return {
         headerStart: -1,
         headerEnd: -1,
@@ -124,6 +125,7 @@ function parseKoelnspergerPriceNote(text: string): number | null {
 function mergeLineFields(merged: MergedFields, line: PdfLine): RowCells {
   const cells = trimCells(lineToCells(line, COL_WINDOWS, COL_CATCH_ALL));
   const text = line.text.trim();
+  const artWin = COL_WINDOWS.find((w) => w.role === "article");
 
   if (KOELNSPERGER_POSITION_RE.test(text)) {
     merged.position = text;
@@ -132,12 +134,25 @@ function mergeLineFields(merged: MergedFields, line: PdfLine): RowCells {
 
   for (const w of line.words) {
     const art = w.text.trim();
-    if (looksLikeKoelnspergerArticle(art)) merged.article = art;
+    if (looksLikeKoelnspergerArticle(art)) {
+      merged.article = art;
+      continue;
+    }
+    // Free-form Art-Nr. (MT110-…, AP, BM-…) — lineToCells maps letterful tokens to description.
+    if (
+      artWin &&
+      w.x >= artWin.xMin &&
+      w.x < artWin.xMax &&
+      isKoelnspergerArticleValue(art)
+    ) {
+      merged.article = art;
+    }
   }
 
   for (const role of ["article", "quantity", "unit", "unitPrice", "lineTotal"] as ColumnRole[]) {
     const val = cells[role]?.trim();
     if (!val || RABATT_LINE.test(val)) continue;
+    if (role === "article" && !isKoelnspergerArticleValue(val)) continue;
     if (role === "unitPrice") {
       merged.unitPrice = val;
     } else {
@@ -150,7 +165,7 @@ function mergeLineFields(merged: MergedFields, line: PdfLine): RowCells {
 
 function rowFromMerged(merged: MergedFields): Omit<LineItem, "description"> | null {
   const position = normalizePosition(merged.position ?? "");
-  const article_number = looksLikeKoelnspergerArticle(merged.article ?? "")
+  const article_number = isKoelnspergerArticleValue(merged.article ?? "")
     ? merged.article!.trim()
     : null;
 
@@ -249,6 +264,7 @@ function parseKoelnspergerBlock(
     const desc = cells.description?.trim();
     if (
       desc &&
+      desc !== merged.article?.trim() &&
       !SKIP_LINE.test(desc) &&
       !KOELNSPERGER_POSITION_RE.test(desc) &&
       !looksLikeKoelnspergerArticle(desc) &&
@@ -264,7 +280,7 @@ function parseKoelnspergerBlock(
   if (!parsed) {
     for (let i = start; i < end; i++) {
       const cells = trimCells(lineToCells(lines[i]!, COL_WINDOWS, COL_CATCH_ALL));
-      if (looksLikeKoelnspergerArticle(cells.article ?? "")) {
+      if (isKoelnspergerArticleValue(cells.article ?? "")) {
         merged.article = cells.article!.trim();
         break;
       }
