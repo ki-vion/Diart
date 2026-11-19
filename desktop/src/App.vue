@@ -77,6 +77,14 @@ function download() {
   downloadBlob(blob, name);
 }
 
+function pricelistCell(value: string | number | null, colIdx: number): string {
+  if (value === null) return "";
+  if (typeof value === "number" && result.value?.pricelist?.priceColumns.includes(colIdx)) {
+    return formatEuroDe(value);
+  }
+  return String(value);
+}
+
 function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
   const v = row[col as keyof PreviewRow];
   if (v === null || v === undefined) return "";
@@ -142,6 +150,40 @@ function cell(row: PreviewRow, col: (typeof previewColumns)[number]) {
       >
         Excel herunterladen
       </button>
+    </section>
+
+    <section v-if="result?.pricelist" class="card">
+      <h2>Vorschau</h2>
+      <div class="table-wrap">
+        <table>
+          <tbody>
+            <tr
+              v-for="(row, idx) in result.pricelist.rows"
+              :key="idx"
+              :class="{ 'preview-spacer-row': row.kind === 'spacer' }"
+            >
+              <td
+                v-if="row.kind === 'spacer'"
+                :colspan="result.pricelist.columnCount"
+                class="preview-spacer-cell"
+              />
+              <th
+                v-else-if="row.kind === 'section'"
+                :colspan="result.pricelist.columnCount"
+                class="pricelist-section"
+              >
+                {{ row.title }}
+              </th>
+              <template v-else-if="row.kind === 'header'">
+                <th v-for="(c, ci) in row.cells" :key="ci">{{ c }}</th>
+              </template>
+              <template v-else>
+                <td v-for="(c, ci) in row.cells" :key="ci">{{ pricelistCell(c, ci) }}</td>
+              </template>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section v-if="result?.preview?.length" class="card">
@@ -359,5 +401,10 @@ td.cell-multiline {
   border-left: none;
   border-right: none;
   background: transparent;
+}
+
+.pricelist-section {
+  text-align: left;
+  font-size: 1.05em;
 }
 </style>

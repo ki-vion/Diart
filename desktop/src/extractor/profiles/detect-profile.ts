@@ -12,6 +12,13 @@ export function detectProfile(structured: PdfStructured): PdfProfile {
     return "IFB GmbH";
   }
   if (
+    /Konditionen/i.test(page0) &&
+    page0.includes("Teilenr.") &&
+    (page0.includes("@Lindner-Group.com") || /NORIT/i.test(page0))
+  ) {
+    return "Norit Konditionen";
+  }
+  if (
     page0.includes("@Lindner-Group.com") ||
     (page0.includes("Rechnungsnummer:") && /Einzelpreis/i.test(page0))
   ) {

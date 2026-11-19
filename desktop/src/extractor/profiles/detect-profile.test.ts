@@ -12,6 +12,13 @@ describe("detectProfile", () => {
     expect(detectProfile(structured("Rechnungsnummer:\nEinzelpreis"))).toBe(
       "Norit",
     );
+    expect(
+      detectProfile(
+        structured(
+          "Konditionen 2026\nTeilenr.\nTeilebezeichnung\nChristian.Sicheneder@Lindner-Group.com\nNORIT-TE 20",
+        ),
+      ),
+    ).toBe("Norit Konditionen");
     expect(detectProfile(structured("STARK Deutschland"))).toBe("RAAB Karcher");
     expect(detectProfile(structured("Rudolf Laier GmbH\nVAN029183"))).toBe(
       "Rudolf Laier GmbH",

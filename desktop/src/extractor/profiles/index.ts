@@ -12,6 +12,7 @@ import { extractMahler } from "./extract-mahler";
 import { extractKoelnsperger } from "./extract-koelnsperger";
 import { extractEconFloor } from "./extract-econ-floor";
 import { extractNorit } from "./extract-norit";
+import { extractNoritKonditionen } from "./extract-norit-konditionen";
 import { extractRkStark } from "./extract-rk";
 import { assignSequentialPositions } from "../assign-positions";
 import type { PdfProfile } from "./types";
@@ -33,6 +34,8 @@ export function extractByProfile(
     }
     case "Norit":
       return extractNorit(structured, source_pdf);
+    case "Norit Konditionen":
+      return extractNoritKonditionen(structured, source_pdf);
     case "RAAB Karcher":
       return extractRkStark(structured, source_pdf);
     case "Rudolf Laier GmbH": {
