@@ -24,7 +24,7 @@ export function explorePipelineInfo(profile: PdfProfile): ExplorePipelineInfo {
       return {
         profile,
         extractionSource:
-          "same-Y rows: Teilenr. + Teilebezeichnung; prices mapped to header columns (ab 5 t, ab 12 t, Nettopreis frei Haus)",
+          "same-Y rows: Teilenr. + Teilebezeichnung; leftmost filled price column (ab 5 t → ab 12 t → …, not bei Abholung), Menge 1",
         anchorSource: "5–6 digit article at x<95 or description+price without Pos.",
         usesXColumnCells: false,
       };

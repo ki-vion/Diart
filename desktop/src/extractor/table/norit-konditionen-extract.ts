@@ -1,4 +1,4 @@
-import type { LineItem, TierPrice } from "../models";
+import type { LineItem } from "../models";
 import { parseDeNumber } from "../utils";
 import type { PdfLine, PdfStructured } from "../../pdf/types";
 import { isNonItemLine } from "./table-zone";
@@ -10,10 +10,10 @@ const TABLE_HEADER_RE = /^(Teilenr\.|Dienstleistung)$/i;
 const PRICE_HEADER_RE = /^Nettopreis\b/i;
 /** Sub-header row below „Nettopreis“: „ab 5 t | ab 12 t | ab 24 t | bei Abholung“. */
 const TIER_HEADER_RE = /^(ab \d+ t|bei Abholung)$/i;
-const TONNAGE_RE = /^ab \d+ t$/i;
-/** Only these PDF columns are exported; „ab 24 t“ and „bei Abholung“ are dropped. */
-const KEEP_COLUMN_RE = /^(ab (5|12) t|Nettopreis|Nettopreis frei Haus)$/i;
-const SERVICE_SECTION = "Dienstleistung";
+/** Pickup prices are a different delivery condition and never used. */
+const EXCLUDED_COLUMN_RE = /Abholung/i;
+/** Price lists carry no quantity — every row is exported with Menge 1. */
+const DEFAULT_QUANTITY = 1;
 
 const DESC_MAX_X = 260;
 const PRICE_MIN_X = 250;
@@ -24,12 +24,6 @@ const GLYPH_WIDTH_EM = 0.5;
 
 type PriceColumn = { label: string; center: number };
 type PricedCell = { price: number; unit: string; center: number };
-
-type TableState = {
-  section: string | null;
-  columns: PriceColumn[];
-  lastTitle: string | null;
-};
 
 function lineXMin(line: PdfLine): number {
   const xs = line.words.map((w) => w.x);
@@ -70,7 +64,9 @@ function parsePrice(text: string): { price: number; unit: string } | null {
 }
 
 function toColumns(lines: PdfLine[]): PriceColumn[] {
-  return lines.map((l) => ({ label: l.text.trim(), center: lineCenter(l) }));
+  return lines
+    .map((l) => ({ label: l.text.trim(), center: lineCenter(l) }))
+    .sort((a, b) => a.center - b.center);
 }
 
 function nearestColumn(columns: PriceColumn[], center: number): PriceColumn | null {
@@ -84,43 +80,33 @@ function nearestColumn(columns: PriceColumn[], center: number): PriceColumn | nu
 }
 
 /**
- * Map price cells onto header columns. A single tonnage price is a merged
- * cell in the PDF (e.g. Heizrohr) and applies to every „ab N t“ column.
+ * Leftmost filled price column (ab 5 t → ab 12 t → ab 24 t …), never „bei Abholung“.
+ * Without known header columns, the leftmost price cell is used.
  */
-function assignTierPrices(columns: PriceColumn[], cells: PricedCell[]): TierPrice[] {
-  const byLabel = new Map<string, number>();
-  for (const cell of cells) {
-    const col = nearestColumn(columns, cell.center);
-    if (col && !byLabel.has(col.label)) byLabel.set(col.label, cell.price);
-  }
-  const tonnage = columns.filter((c) => TONNAGE_RE.test(c.label));
-  const tonnagePrices = tonnage.filter((c) => byLabel.has(c.label));
-  if (tonnagePrices.length === 1) {
-    const merged = byLabel.get(tonnagePrices[0]!.label)!;
-    for (const c of tonnage) byLabel.set(c.label, merged);
-  }
-  return columns
-    .filter((c) => KEEP_COLUMN_RE.test(c.label) && byLabel.has(c.label))
-    .map((c) => ({ label: c.label, price: byLabel.get(c.label)! }));
+function pickPrice(columns: PriceColumn[], cells: PricedCell[]): PricedCell | null {
+  const sorted = [...cells].sort((a, b) => a.center - b.center);
+  if (columns.length === 0) return sorted[0] ?? null;
+  return (
+    sorted.find((cell) => {
+      const col = nearestColumn(columns, cell.center);
+      return col !== null && !EXCLUDED_COLUMN_RE.test(col.label);
+    }) ?? null
+  );
 }
 
-/** Header rows update the table state; returns true when the group was a header. */
-function applyHeaderRow(group: PdfLine[], state: TableState): boolean {
+/** Header rows replace the active price columns; returns null for non-header rows. */
+function headerColumns(group: PdfLine[]): PriceColumn[] | null {
   const texts = group.map((l) => l.text.trim());
-  const opener = texts.find((t) => TABLE_HEADER_RE.test(t));
-  if (opener) {
-    state.section = /^Dienstleistung$/i.test(opener) ? SERVICE_SECTION : state.lastTitle;
-    state.columns = toColumns(group.filter((l) => PRICE_HEADER_RE.test(l.text.trim())));
-    return true;
+  if (texts.some((t) => TABLE_HEADER_RE.test(t))) {
+    return toColumns(group.filter((l) => PRICE_HEADER_RE.test(l.text.trim())));
   }
   if (texts.length > 0 && texts.every((t) => TIER_HEADER_RE.test(t))) {
-    state.columns = toColumns(group);
-    return true;
+    return toColumns(group);
   }
-  return false;
+  return null;
 }
 
-function parseRow(group: PdfLine[], state: TableState): LineItem | null {
+function parseRow(group: PdfLine[], columns: PriceColumn[]): LineItem | null {
   let article: string | null = null;
   const descParts: string[] = [];
   const cells: PricedCell[] = [];
@@ -138,43 +124,36 @@ function parseRow(group: PdfLine[], state: TableState): LineItem | null {
     }
   }
 
-  if (cells.length === 0 || descParts.length === 0) {
-    if (group.length === 1 && descParts.length === 1) state.lastTitle = descParts[0]!;
-    return null;
-  }
-
-  cells.sort((a, b) => a.center - b.center);
-  const tiers =
-    state.columns.length > 0
-      ? assignTierPrices(state.columns, cells)
-      : [{ label: "Nettopreis", price: cells[0]!.price }];
-  const first = tiers[0];
-  if (!first) return null;
+  if (cells.length === 0 || descParts.length === 0) return null;
+  const chosen = pickPrice(columns, cells);
+  if (!chosen) return null;
 
   return {
     position: null,
     article_number: article,
     artikel_prefix: null,
     description: descParts.join(" "),
-    quantity: null,
-    unit: cells[0]!.unit || null,
-    unit_price: first.price,
-    line_total: null,
-    section: state.section,
-    tier_prices: tiers,
+    quantity: DEFAULT_QUANTITY,
+    unit: chosen.unit || null,
+    unit_price: chosen.price,
+    line_total: chosen.price * DEFAULT_QUANTITY,
   };
 }
 
 export function extractNoritKonditionenItems(structured: PdfStructured): LineItem[] {
   const items: LineItem[] = [];
-  const state: TableState = { section: null, columns: [], lastTitle: null };
+  let columns: PriceColumn[] = [];
   for (const page of structured.pages) {
     const usable = page.lines.filter(
       (l) => l.text.trim() && !isNonItemLine(l, page.height),
     );
     for (const group of groupLinesByY(usable)) {
-      if (applyHeaderRow(group, state)) continue;
-      const item = parseRow(group, state);
+      const header = headerColumns(group);
+      if (header) {
+        columns = header;
+        continue;
+      }
+      const item = parseRow(group, columns);
       if (item) items.push(item);
     }
   }

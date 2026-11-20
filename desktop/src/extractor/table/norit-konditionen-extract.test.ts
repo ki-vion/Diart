@@ -15,7 +15,6 @@ function page(lines: PdfLine[]): PdfStructured {
 }
 
 const TONNAGE_HEADER = [
-  frag("NORIT-Trockenestrich", 61, 304),
   frag("Teilenr.", 59, 326),
   frag("Teilebezeichnung", 107, 326),
   frag("Nettopreis", 380, 326),
@@ -26,7 +25,7 @@ const TONNAGE_HEADER = [
 ];
 
 describe("extractNoritKonditionenItems", () => {
-  it("keeps only ab 5 t / ab 12 t and tags the section", () => {
+  it("uses the ab 5 t price with quantity 1", () => {
     const items = extractNoritKonditionenItems(
       page([
         ...TONNAGE_HEADER,
@@ -42,17 +41,14 @@ describe("extractNoritKonditionenItems", () => {
     expect(items[0]).toMatchObject({
       article_number: "110554",
       description: "NORIT-TE 15",
+      quantity: 1,
       unit: "m²",
       unit_price: 15.5,
-      section: "NORIT-Trockenestrich",
-      tier_prices: [
-        { label: "ab 5 t", price: 15.5 },
-        { label: "ab 12 t", price: 15.05 },
-      ],
+      line_total: 15.5,
     });
   });
 
-  it("spreads a merged tonnage price over ab 5 t and ab 12 t, ignoring Abholung", () => {
+  it("falls back to the next tonnage column, never bei Abholung", () => {
     const items = extractNoritKonditionenItems(
       page([
         ...TONNAGE_HEADER,
@@ -60,18 +56,19 @@ describe("extractNoritKonditionenItems", () => {
         frag("NORIT-Heizrohr - 90 Meter", 107, 471),
         frag("0,82 EUR/lfm", 343, 471),
         frag("0,79 EUR/lfm", 485, 471),
+        frag("999999", 68, 483),
+        frag("Nur Abholung", 107, 483),
+        frag("1,00 EUR/St.", 485, 483),
       ]),
     );
-    expect(items[0]?.tier_prices).toEqual([
-      { label: "ab 5 t", price: 0.82 },
-      { label: "ab 12 t", price: 0.82 },
-    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.unit_price).toBe(0.82);
+    expect(items[0]?.unit).toBe("lfm");
   });
 
-  it("takes Nettopreis frei Haus and drops Nettopreis bei Abholung", () => {
+  it("takes Nettopreis frei Haus and ignores Nettopreis bei Abholung", () => {
     const items = extractNoritKonditionenItems(
       page([
-        frag("NORIT-Schüttung und Zubehör", 61, 125),
         frag("Teilenr.", 59, 143),
         frag("Teilebezeichnung", 107, 143),
         frag("Nettopreis frei Haus", 288, 143),
@@ -82,11 +79,7 @@ describe("extractNoritKonditionenItems", () => {
         frag("9,86 EUR/Sack", 446, 162),
       ]),
     );
-    expect(items[0]).toMatchObject({
-      section: "NORIT-Schüttung und Zubehör",
-      unit_price: 10.16,
-      tier_prices: [{ label: "Nettopreis frei Haus", price: 10.16 }],
-    });
+    expect(items[0]).toMatchObject({ unit_price: 10.16, unit: "Sack", quantity: 1 });
   });
 
   it("keeps service rows without article numbers", () => {
@@ -103,9 +96,8 @@ describe("extractNoritKonditionenItems", () => {
     expect(items[0]).toMatchObject({
       position: "1",
       article_number: null,
+      quantity: 1,
       unit_price: 2,
-      section: "Dienstleistung",
-      tier_prices: [{ label: "Nettopreis", price: 2 }],
     });
   });
 });
