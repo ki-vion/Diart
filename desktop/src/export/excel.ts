@@ -2,8 +2,6 @@ import ExcelJS from "exceljs";
 import type { ExtractionResult } from "../extractor/models";
 import { formatAlternativeGesamtText, isAlternativeItem } from "./alternative-item";
 import { formatArtikelCell, formatEinheitCell } from "./format-artikel";
-import { writePricelistSheet } from "./pricelist-excel";
-import { isPricelistResult } from "./pricelist-table";
 import {
   computeLineGesamt,
   EXCEL_EURO_NUMFMT,
@@ -109,10 +107,6 @@ export async function buildExcelBuffer(
   opts: BuildExcelOptions,
 ): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
-  if (isPricelistResult(result)) {
-    writePricelistSheet(workbook, result);
-    return writeWorkbook(workbook);
-  }
   const sheet = workbook.addWorksheet("Materialliste");
 
   sheet.addRow([...MATERIALLISTE_HEADERS]);
@@ -181,10 +175,6 @@ export async function buildExcelBuffer(
     addSummaryFooters(sheet, firstDataRow, lastDataRow);
   }
 
-  return writeWorkbook(workbook);
-}
-
-async function writeWorkbook(workbook: ExcelJS.Workbook): Promise<Uint8Array> {
   const raw = await workbook.xlsx.writeBuffer();
   if (raw instanceof Uint8Array) return raw;
   if (raw instanceof ArrayBuffer) return new Uint8Array(raw);

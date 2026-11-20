@@ -1,10 +1,5 @@
 import { formatAlternativeGesamtText, isAlternativeItem } from "../export/alternative-item";
 import { formatArtikelCell, formatEinheitCell } from "../export/format-artikel";
-import {
-  buildPricelistTable,
-  isPricelistResult,
-  type PricelistTable,
-} from "../export/pricelist-table";
 
 export type PreviewRow = {
   Artikel: string;
@@ -32,8 +27,6 @@ export type ConvertResponse = {
   aufschlag?: number;
   preview?: PreviewRow[];
   previewTotals?: PreviewTotals;
-  /** Price-list layouts (e.g. Norit Konditionen): PDF table 1:1 instead of Materialliste. */
-  pricelist?: PricelistTable;
   // Web: we return a Blob instead of a filesystem path
   xlsxBlob?: Blob;
   outputFileName?: string;
@@ -149,23 +142,16 @@ export async function convertPdfFile(
     const baseName = file.name.replace(/\.pdf$/i, "");
     const outputFileName = `${baseName || "output"}.xlsx`;
 
-    const base = {
+    return {
       ok: true,
       layout_id: extraction.layout_id,
       extraction_mode,
       message: "Konvertierung erfolgreich",
       aufschlag,
-      xlsxBlob,
-      outputFileName,
-    } as const;
-
-    if (isPricelistResult(extraction)) {
-      return { ...base, pricelist: buildPricelistTable(extraction.items) };
-    }
-    return {
-      ...base,
       preview: toPreviewRows(extraction.items, aufschlag, extraction.layout_id),
       previewTotals: computePreviewTotals(extraction.items, aufschlag),
+      xlsxBlob,
+      outputFileName,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
